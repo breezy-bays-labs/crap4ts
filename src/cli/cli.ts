@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { writeFileSync, existsSync } from "node:fs";
+import { writeFileSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { analyze } from "../core/analyze.js";
 import {
   findConfigFile,
@@ -30,6 +31,19 @@ const EXIT_THRESHOLD = 1;
 const EXIT_CONFIG_ERROR = 2;
 const EXIT_PARSE_ERROR = 3;
 
+// ── Version ───────────────────────────────────────────────────────
+
+function readVersion(): string {
+  const __dirname = fileURLToPath(new URL(".", import.meta.url));
+  const pkgPath = join(__dirname, "..", "package.json");
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version: string };
+    return pkg.version;
+  } catch {
+    return "0.0.0";
+  }
+}
+
 // ── CLI Definition ─────────────────────────────────────────────────
 
 const program = new Command();
@@ -39,7 +53,7 @@ program
   .description(
     "CRAP score analyzer for TypeScript — find complex, under-tested functions",
   )
-  .version("0.0.1")
+  .version(readVersion())
   .option("-c, --coverage <path>", "path to coverage JSON")
   .option("-s, --src <paths...>", "source directories")
   .option("-t, --threshold <n>", "CRAP threshold", parseFloat)
