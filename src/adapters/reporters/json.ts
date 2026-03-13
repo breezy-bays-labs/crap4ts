@@ -1,0 +1,20 @@
+import type { ReporterPort } from "../../ports/reporter-port.js";
+import type { AnalysisResult } from "../../domain/types.js";
+
+const VERSION = "0.0.1";
+
+export class JsonReporter implements ReporterPort {
+  format(result: AnalysisResult): string {
+    const envelope = {
+      $schema: "",
+      version: VERSION,
+      timestamp: new Date().toISOString(),
+      config: result.thresholdConfig,
+      summary: result.summary,
+      files: result.files,
+      passed: result.passed,
+    };
+
+    return JSON.stringify(envelope, null, 2);
+  }
+}
