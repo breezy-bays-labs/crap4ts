@@ -38,3 +38,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:coverage
+      - run: npm run build
+      - name: CRAP Analysis (dogfooding)
+        run: node dist/cli.js --format json
