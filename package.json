@@ -1,0 +1,117 @@
+{
+  "name": "crap4ts",
+  "version": "0.1.0-alpha.1",
+  "description": "CRAP score analyzer for TypeScript — find complex, under-tested functions",
+  "type": "module",
+  "bin": {
+    "crap4ts": "./dist/cli.js"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./formula": {
+      "import": {
+        "types": "./dist/formula.d.ts",
+        "default": "./dist/formula.js"
+      },
+      "require": {
+        "types": "./dist/formula.d.cts",
+        "default": "./dist/formula.cjs"
+      }
+    },
+    "./complexity": {
+      "import": {
+        "types": "./dist/complexity.d.ts",
+        "default": "./dist/complexity.js"
+      },
+      "require": {
+        "types": "./dist/complexity.d.cts",
+        "default": "./dist/complexity.cjs"
+      }
+    },
+    "./coverage": {
+      "import": {
+        "types": "./dist/coverage.d.ts",
+        "default": "./dist/coverage.js"
+      },
+      "require": {
+        "types": "./dist/coverage.d.cts",
+        "default": "./dist/coverage.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/ tests/",
+    "typecheck": "tsc --noEmit",
+    "mutation": "stryker run",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "crap",
+    "complexity",
+    "cyclomatic",
+    "coverage",
+    "testing",
+    "quality",
+    "typescript",
+    "static-analysis"
+  ],
+  "author": "Breezy Bays Labs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/breezy-bays-labs/crap4ts.git"
+  },
+  "homepage": "https://github.com/breezy-bays-labs/crap4ts",
+  "bugs": {
+    "url": "https://github.com/breezy-bays-labs/crap4ts/issues"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "dependencies": {
+    "@jridgewell/trace-mapping": "^0.3.0",
+    "@typescript-eslint/typescript-estree": "^8.0.0",
+    "chalk": "^5.3.0",
+    "commander": "^13.0.0",
+    "jiti": "^2.0.0",
+    "picomatch": "^4.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "^9.6.0",
+    "@stryker-mutator/typescript-checker": "^9.6.0",
+    "@stryker-mutator/vitest-runner": "^9.6.0",
+    "@types/node": "^22.0.0",
+    "@types/picomatch": "^3.0.0",
+    "@vitest/coverage-v8": "^3.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
+  }
+}
