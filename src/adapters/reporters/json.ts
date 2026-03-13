@@ -1,13 +1,12 @@
 import type { ReporterPort } from "../../ports/reporter-port.js";
 import type { AnalysisResult } from "../../domain/types.js";
-
-const VERSION = "0.0.1";
+import { readPackageVersion } from "./version.js";
 
 export class JsonReporter implements ReporterPort {
   format(result: AnalysisResult): string {
     const envelope = {
       $schema: "",
-      version: VERSION,
+      version: readPackageVersion(),
       timestamp: new Date().toISOString(),
       config: result.thresholdConfig,
       summary: result.summary,

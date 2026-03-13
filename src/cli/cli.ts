@@ -312,8 +312,9 @@ function createReporter(config: ResolvedConfig): ReporterPort {
     case "markdown":
       return new MarkdownReporter();
     case "table":
-    default:
       return new ConsoleReporter({ color: !config.noColor });
+    default:
+      throw new Error(`Unknown output format: "${format}". Valid formats: table, json, markdown`);
   }
 }
 

@@ -16,6 +16,12 @@ describe("spansOverlap", () => {
     )).toBe(false);
   });
 
+  it("returns false when a.startLine >= b.endLine (non-adjacent)", () => {
+    const a = { startLine: 10, startColumn: 0, endLine: 20, endColumn: 0 };
+    const b = { startLine: 1, startColumn: 0, endLine: 5, endColumn: 0 };
+    expect(spansOverlap(a, b)).toBe(false);
+  });
+
   it("returns true when one contains the other", () => {
     expect(spansOverlap(
       { startLine: 1, startColumn: 0, endLine: 20, endColumn: 0 },
@@ -30,6 +36,23 @@ describe("spanContains", () => {
       { startLine: 1, startColumn: 0, endLine: 20, endColumn: 0 },
       { startLine: 5, startColumn: 0, endLine: 10, endColumn: 0 },
     )).toBe(true);
+  });
+
+  it("returns true for identical spans", () => {
+    const s = { startLine: 5, startColumn: 0, endLine: 10, endColumn: 0 };
+    expect(spanContains(s, s)).toBe(true);
+  });
+
+  it("returns false when only startLine fails", () => {
+    const outer = { startLine: 6, startColumn: 0, endLine: 10, endColumn: 0 };
+    const inner = { startLine: 5, startColumn: 0, endLine: 10, endColumn: 0 };
+    expect(spanContains(outer, inner)).toBe(false);
+  });
+
+  it("returns false when only endLine fails", () => {
+    const outer = { startLine: 5, startColumn: 0, endLine: 9, endColumn: 0 };
+    const inner = { startLine: 5, startColumn: 0, endLine: 10, endColumn: 0 };
+    expect(spanContains(outer, inner)).toBe(false);
   });
 
   it("returns false when inner extends beyond outer", () => {
@@ -51,6 +74,12 @@ describe("overlapRatio", () => {
       { startLine: 1, startColumn: 0, endLine: 11, endColumn: 0 },
       { startLine: 6, startColumn: 0, endLine: 16, endColumn: 0 },
     )).toBe(0.5);
+  });
+
+  it("returns 0 for zero-length span", () => {
+    const a = { startLine: 5, startColumn: 0, endLine: 5, endColumn: 0 };
+    const b = { startLine: 1, startColumn: 0, endLine: 10, endColumn: 0 };
+    expect(overlapRatio(a, b)).toBe(0);
   });
 
   it("returns 0 for no overlap", () => {

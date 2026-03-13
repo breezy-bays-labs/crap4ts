@@ -13,10 +13,11 @@ import type { CoveragePort } from "../ports/coverage-port.js";
 
 class AutoDetectCoverageAdapter implements CoveragePort {
   private readonly istanbul: IstanbulCoverageAdapter;
-  private readonly v8 = new V8CoverageAdapter();
+  private readonly v8: V8CoverageAdapter;
 
   constructor(cwd?: string) {
     this.istanbul = new IstanbulCoverageAdapter(cwd);
+    this.v8 = new V8CoverageAdapter(cwd);
   }
 
   parse(data: unknown) {

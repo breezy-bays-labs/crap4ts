@@ -50,12 +50,8 @@ export async function analyzeFile(
   // 3. Load coverage data if a path was provided
   let coverageMap = new Map<string, FunctionCoverage[]>();
   if (options?.coverage) {
-    try {
-      const rawData = await resolvedDeps.readJson(options.coverage);
-      coverageMap = resolvedDeps.coveragePort.parse(rawData);
-    } catch {
-      // Coverage unreadable — fall through to worst-case scoring
-    }
+    const rawData = await resolvedDeps.readJson(options.coverage);
+    coverageMap = resolvedDeps.coveragePort.parse(rawData);
   }
 
   // 4. Flatten coverage entries

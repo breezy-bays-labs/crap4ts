@@ -128,12 +128,13 @@ describe("JsonReporter", () => {
       expect(typeof parsed.$schema).toBe("string");
     });
 
-    it("includes version field matching package version", () => {
+    it("includes version field as a semver string", () => {
       const result = makeResult([], makeSummary(), true);
       const output = reporter.format(result);
       const parsed = JSON.parse(output);
       expect(parsed).toHaveProperty("version");
-      expect(parsed.version).toBe("0.0.1");
+      expect(typeof parsed.version).toBe("string");
+      expect(parsed.version).toMatch(/^\d+\.\d+\.\d+/);
     });
 
     it("includes timestamp as ISO 8601 string", () => {

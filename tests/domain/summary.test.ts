@@ -86,6 +86,25 @@ describe("computeSummary", () => {
     expect(summary.averageCrap).toBe(15);
   });
 
+  it("computes correct median with unsorted input", () => {
+    const verdicts = [
+      makeVerdict("high", 10, 12),
+      makeVerdict("low", 2, 12),
+      makeVerdict("mid", 5, 12),
+    ];
+    const summary = computeSummary(verdicts);
+    expect(summary.medianCrap).toBe(5);
+  });
+
+  it("identifies worstFunction regardless of input order", () => {
+    const verdicts = [
+      makeVerdict("worst", 50, 12),
+      makeVerdict("ok", 2, 12),
+    ];
+    const summary = computeSummary(verdicts);
+    expect(summary.worstFunction?.qualifiedName).toBe("worst");
+  });
+
   it("counts totalFiles from unique filePaths", () => {
     const v1 = makeVerdict("a", 5, 12);
     const v2: FunctionVerdict = {

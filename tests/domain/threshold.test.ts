@@ -23,6 +23,18 @@ describe("createThresholdConfig", () => {
     expect(() => createThresholdConfig({ preset: -5 })).toThrow();
   });
 
+  it("rejects override with threshold <= 0", () => {
+    expect(() => createThresholdConfig({
+      overrides: [{ glob: "src/**", threshold: 0 }],
+    })).toThrow();
+  });
+
+  it("rejects override with negative threshold", () => {
+    expect(() => createThresholdConfig({
+      overrides: [{ glob: "src/**", threshold: -5 }],
+    })).toThrow();
+  });
+
   it("preserves override order", () => {
     const config = createThresholdConfig({
       overrides: [

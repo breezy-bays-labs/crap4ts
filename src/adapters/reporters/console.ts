@@ -1,6 +1,7 @@
 import { Chalk, type ChalkInstance } from "chalk";
 import type { ReporterPort } from "../../ports/reporter-port.js";
 import type { AnalysisResult, FunctionVerdict } from "../../domain/types.js";
+import { readPackageVersion } from "./version.js";
 
 export interface ConsoleReporterOptions {
   color?: boolean;
@@ -101,6 +102,6 @@ export class ConsoleReporter implements ReporterPort {
   }
 
   private version(): string {
-    return "1.0.0";
+    return readPackageVersion();
   }
 }

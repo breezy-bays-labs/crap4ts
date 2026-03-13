@@ -210,16 +210,11 @@ async function loadCoverageData(
   coveragePath: string | undefined,
 ): Promise<Map<string, FunctionCoverage[]>> {
   if (!coveragePath) {
-    // Try default coverage paths
     return new Map();
   }
 
-  try {
-    const rawData = await deps.readJson(coveragePath);
-    return deps.coveragePort.parse(rawData);
-  } catch {
-    return new Map();
-  }
+  const rawData = await deps.readJson(coveragePath);
+  return deps.coveragePort.parse(rawData);
 }
 
 function extractCoveragePercent(

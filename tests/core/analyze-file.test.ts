@@ -217,7 +217,7 @@ describe("analyzeFile", () => {
     expect(verdicts).toEqual([]);
   });
 
-  it("handles coverage file read failure gracefully (falls back to worst case)", async () => {
+  it("propagates coverage file read failure as an error", async () => {
     const comp = makeComplexity("src/risky.ts", "fn", 4, span(1, 10));
 
     const deps = createDeps({
@@ -225,21 +225,13 @@ describe("analyzeFile", () => {
       readJson: async () => {
         throw new Error("File not found");
       },
-      // With no coverage data, matcher puts everything in unmatchedComplexity
       matcher: fakeMatcher([], [comp]),
       readFile: async () => "// source",
     });
 
-    const verdicts = await analyzeFile(
-      "src/risky.ts",
-      { coverage: "/nonexistent/coverage.json" },
-      deps,
-    );
-
-    expect(verdicts).toHaveLength(1);
-    expect(verdicts[0]!.scored.coveragePercent).toBe(0);
-    // CRAP(4, 0%) = 16 + 4 = 20
-    expect(verdicts[0]!.scored.crap.value).toBe(20);
+    await expect(
+      analyzeFile("src/risky.ts", { coverage: "/nonexistent/coverage.json" }, deps),
+    ).rejects.toThrow("File not found");
   });
 
   it("handles multiple functions with mixed match/unmatch results", async () => {
