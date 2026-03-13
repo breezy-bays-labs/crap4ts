@@ -25,10 +25,6 @@ interface V8ScriptCoverage {
   readonly functions: readonly V8FunctionCoverage[];
 }
 
-interface V8CoverageData {
-  readonly result: readonly V8ScriptCoverage[];
-}
-
 // ── Constants ─────────────────────────────────────────────────────
 
 /** Approximate characters per line for byte-offset → line-number conversion. */
@@ -136,7 +132,7 @@ export class V8CoverageAdapter implements CoveragePort {
       );
     }
 
-    const v8Data = data as V8CoverageData;
+    const v8Data = data as Record<string, unknown>;
 
     if (!Array.isArray(v8Data.result)) {
       throw new Error(
@@ -144,7 +140,9 @@ export class V8CoverageAdapter implements CoveragePort {
       );
     }
 
-    const scripts = v8Data.result;
+    const scripts = (v8Data.result as V8ScriptCoverage[]).filter(
+      (s) => s && typeof s === "object" && typeof s.url === "string" && Array.isArray(s.functions),
+    );
 
     // Resolve absolute paths from URLs
     const absolutePaths = scripts.map((s) => stripFileProtocol(s.url));

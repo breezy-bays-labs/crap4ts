@@ -5,20 +5,18 @@ import type { FunctionFilter, SourceSpan } from "../domain/types.js";
 // ── Exec Abstraction (for testing) ──────────────────────────────────
 
 export interface ExecFn {
-  (cmd: string): Promise<{ stdout: string; exitCode: number }>;
+  (command: string, args: string[]): Promise<{ stdout: string; exitCode: number }>;
 }
 
 const execFileAsync = promisify(execFile);
 
 /**
  * Default exec implementation using execFile (not exec) to avoid
- * shell injection. The cmd string is split into command + args.
+ * shell injection. Arguments are passed as an array, never interpolated.
  */
-const defaultExec: ExecFn = async (cmd: string) => {
-  const parts = cmd.split(" ");
-  const [command, ...args] = parts;
+const defaultExec: ExecFn = async (command: string, args: string[]) => {
   try {
-    const { stdout } = await execFileAsync(command!, args);
+    const { stdout } = await execFileAsync(command, args);
     return { stdout, exitCode: 0 };
   } catch (error: unknown) {
     const execError = error as { stdout?: string; code?: number };
@@ -47,14 +45,22 @@ export async function getChangedFiles(
   ref: string,
   options?: GetChangedFilesOptions,
 ): Promise<FunctionFilter> {
-  const exec = options?.exec ?? defaultExec;
-  const cmd = `git diff --name-only ${ref}`;
+  // Validate ref: reject anything that looks like a flag to prevent argument injection
+  if (ref.startsWith("-")) {
+    throw new Error(
+      `Invalid git ref: "${ref}". Refs must not start with "-".`,
+    );
+  }
 
-  const { stdout, exitCode } = await exec(cmd);
+  const exec = options?.exec ?? defaultExec;
+
+  // Use -- separator to prevent git from interpreting ref as flags
+  const { stdout, exitCode } = await exec("git", ["diff", "--name-only", ref, "--"]);
 
   if (exitCode !== 0) {
+    const safeRef = ref.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
     throw new Error(
-      `git diff failed with exit code ${exitCode}: ${stdout.trim()}`,
+      `git diff failed with exit code ${exitCode}: ${stdout.trim()} (ref: ${safeRef})`,
     );
   }
 
@@ -69,8 +75,9 @@ export async function getChangedFiles(
     changedFiles.set(file, null);
   }
 
+  const safeRef = ref.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
   return {
-    description: `Changed since ${ref}`,
+    description: `Changed since ${safeRef}`,
     changedFiles,
   };
 }

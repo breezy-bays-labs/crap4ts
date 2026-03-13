@@ -7,7 +7,7 @@ function createMockExec(
   stdout: string,
   exitCode = 0,
 ): ExecFn {
-  return async (_cmd: string) => ({ stdout, exitCode });
+  return async (_command: string, _args: string[]) => ({ stdout, exitCode });
 }
 
 // ── getChangedFiles ─────────────────────────────────────────────────
@@ -89,16 +89,19 @@ describe("getChangedFiles", () => {
     );
   });
 
-  it("passes correct git command to exec", async () => {
-    let capturedCmd = "";
-    const exec: ExecFn = async (cmd: string) => {
-      capturedCmd = cmd;
+  it("passes correct git arguments to exec", async () => {
+    let capturedCommand = "";
+    let capturedArgs: string[] = [];
+    const exec: ExecFn = async (command: string, args: string[]) => {
+      capturedCommand = command;
+      capturedArgs = args;
       return { stdout: "", exitCode: 0 };
     };
 
     await getChangedFiles("HEAD~3", { exec });
 
-    expect(capturedCmd).toBe("git diff --name-only HEAD~3");
+    expect(capturedCommand).toBe("git");
+    expect(capturedArgs).toEqual(["diff", "--name-only", "HEAD~3", "--"]);
   });
 
   it("handles single file without trailing newline", async () => {
@@ -114,5 +117,30 @@ describe("getChangedFiles", () => {
     const filter = await getChangedFiles("main", { exec });
 
     expect(filter.changedFiles.size).toBe(1);
+  });
+
+  // ── Security: argument injection prevention ──────────────────────
+
+  it("rejects refs that start with a dash (flag injection)", async () => {
+    const exec = createMockExec("");
+
+    await expect(
+      getChangedFiles("--output=/tmp/evil", { exec }),
+    ).rejects.toThrow(/invalid git ref/i);
+  });
+
+  it("rejects refs with leading dash even with spaces", async () => {
+    const exec = createMockExec("");
+
+    await expect(
+      getChangedFiles("-flag value", { exec }),
+    ).rejects.toThrow(/invalid git ref/i);
+  });
+
+  it("strips control characters from ref in description", async () => {
+    const exec = createMockExec("src/foo.ts\n");
+    const filter = await getChangedFiles("main\x1b[31m", { exec });
+
+    expect(filter.description).not.toContain("\x1b");
   });
 });

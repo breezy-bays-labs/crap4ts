@@ -160,8 +160,10 @@ export class IstanbulCoverageAdapter implements CoveragePort {
       );
     }
 
-    const record = data as Record<string, IstanbulFileCoverage>;
-    const entries = Object.entries(record);
+    const record = data as Record<string, unknown>;
+    const entries = Object.entries(record).filter(
+      ([, v]) => v !== null && typeof v === "object" && !Array.isArray(v),
+    ) as [string, IstanbulFileCoverage][];
 
     // Determine prefix to strip
     const prefix = this.cwd
@@ -181,7 +183,7 @@ export class IstanbulCoverageAdapter implements CoveragePort {
 
       for (const fnKey of fnKeys) {
         const fnEntry = fileCov.fnMap[fnKey];
-        if (!fnEntry) continue;
+        if (!fnEntry?.loc?.start || !fnEntry.loc.end) continue;
 
         const fnLoc = fnEntry.loc;
 
