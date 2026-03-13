@@ -1,0 +1,48 @@
+{
+  "result": [
+    {
+      "scriptId": "1",
+      "url": "file:///projects/my-app/src/math.ts",
+      "functions": [
+        {
+          "functionName": "add",
+          "ranges": [
+            { "startOffset": 0, "endOffset": 120, "count": 10 },
+            { "startOffset": 20, "endOffset": 80, "count": 10 }
+          ],
+          "isBlockCoverage": true
+        },
+        {
+          "functionName": "divide",
+          "ranges": [
+            { "startOffset": 121, "endOffset": 360, "count": 5 },
+            { "startOffset": 160, "endOffset": 240, "count": 3 },
+            { "startOffset": 241, "endOffset": 320, "count": 0 }
+          ],
+          "isBlockCoverage": true
+        },
+        {
+          "functionName": "neverCalled",
+          "ranges": [
+            { "startOffset": 361, "endOffset": 480, "count": 0 }
+          ],
+          "isBlockCoverage": true
+        }
+      ]
+    },
+    {
+      "scriptId": "2",
+      "url": "file:///projects/my-app/src/utils/format.ts",
+      "functions": [
+        {
+          "functionName": "formatName",
+          "ranges": [
+            { "startOffset": 0, "endOffset": 100, "count": 7 },
+            { "startOffset": 10, "endOffset": 60, "count": 7 }
+          ],
+          "isBlockCoverage": true
+        }
+      ]
+    }
+  ]
+}
