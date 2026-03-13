@@ -305,7 +305,7 @@ describe("ConsoleReporter", () => {
       const output = reporter.format(result);
 
       // ESC character = \x1b or \u001b — ANSI codes start with this
-      // eslint-disable-next-line no-control-regex
+       
       expect(output).not.toMatch(/\x1b\[/);
     });
 
@@ -339,7 +339,7 @@ describe("ConsoleReporter", () => {
       const reporter = new ConsoleReporter({ color: true });
       const output = reporter.format(result);
 
-      // eslint-disable-next-line no-control-regex
+       
       expect(output).toMatch(/\x1b\[/);
     });
   });
@@ -363,7 +363,7 @@ describe("ConsoleReporter", () => {
       const output = reporter.format(result);
 
       // Red ANSI: \x1b[31m (or \x1b[91m for bright red)
-      // eslint-disable-next-line no-control-regex
+       
       expect(output).toMatch(/\x1b\[3?1m.*30\.0/s);
     });
 
@@ -385,7 +385,7 @@ describe("ConsoleReporter", () => {
       const output = reporter.format(result);
 
       // Yellow ANSI: \x1b[33m
-      // eslint-disable-next-line no-control-regex
+       
       expect(output).toMatch(/\x1b\[33m.*65\.0/s);
     });
 
@@ -407,7 +407,7 @@ describe("ConsoleReporter", () => {
       const output = reporter.format(result);
 
       // Green ANSI: \x1b[32m
-      // eslint-disable-next-line no-control-regex
+       
       expect(output).toMatch(/\x1b\[32m.*95\.0/s);
     });
 
@@ -429,9 +429,9 @@ describe("ConsoleReporter", () => {
       const output = reporter.format(result);
 
       // Bold ANSI: \x1b[1m, Red: \x1b[31m — chalk combines them
-      // eslint-disable-next-line no-control-regex
+       
       expect(output).toMatch(/\x1b\[1m/);
-      // eslint-disable-next-line no-control-regex
+       
       expect(output).toMatch(/\x1b\[3?1m/);
     });
   });

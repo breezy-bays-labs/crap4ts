@@ -28,11 +28,12 @@ async function runCli(
       env: { ...process.env, ...options?.env, NO_COLOR: "1" },
     });
     return { stdout: result.stdout, stderr: result.stderr, exitCode: 0 };
-  } catch (e: any) {
+  } catch (_e: unknown) {
+    const err = _e as { stdout?: string; stderr?: string; code?: number };
     return {
-      stdout: (e.stdout as string) ?? "",
-      stderr: (e.stderr as string) ?? "",
-      exitCode: (e.code as number) ?? 1,
+      stdout: err.stdout ?? "",
+      stderr: err.stderr ?? "",
+      exitCode: err.code ?? 1,
     };
   }
 }
@@ -194,7 +195,7 @@ describe("flags", () => {
       "--no-color",
     ]);
     // ANSI escape codes start with ESC (0x1b)
-    // eslint-disable-next-line no-control-regex
+     
     expect(stdout).not.toMatch(/\u001b\[/);
   });
 
@@ -203,7 +204,7 @@ describe("flags", () => {
       ["--coverage", ISTANBUL_COV, "--src", FIXTURES],
       { env: { NO_COLOR: "1" } },
     );
-    // eslint-disable-next-line no-control-regex
+     
     expect(stdout).not.toMatch(/\u001b\[/);
   });
 

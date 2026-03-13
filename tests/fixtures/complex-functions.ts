@@ -63,5 +63,5 @@ export function keyCount(obj: Record<string, unknown>): number {
 // CC=2: try-catch
 export function safeParse(json: string): unknown {
   try { return JSON.parse(json); }
-  catch (e) { return null; }
+  catch (_e) { return null; }
 }

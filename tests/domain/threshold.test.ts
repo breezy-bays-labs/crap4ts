@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createThresholdConfig, resolveThreshold, PRESETS } from "../../src/domain/threshold.js";
+import { createThresholdConfig, resolveThreshold } from "../../src/domain/threshold.js";
 
 describe("createThresholdConfig", () => {
   it("uses default threshold of 12 when no options", () => {

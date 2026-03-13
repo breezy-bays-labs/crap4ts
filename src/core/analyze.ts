@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { computeCrap } from "../domain/crap.js";
 import {
   createThresholdConfig,
@@ -45,8 +46,8 @@ export async function analyze(
   options?: AnalyzeOptions,
   deps?: AnalyzeDeps,
 ): Promise<AnalysisResult> {
-  const resolvedDeps = deps ?? (await loadDefaults());
   const opts = resolveOptions(options);
+  const resolvedDeps = deps ?? (await loadDefaults(opts.cwd));
 
   // 1. Build threshold config
   const thresholdConfig = buildThresholdConfig(opts);
@@ -67,7 +68,8 @@ export async function analyze(
   // 4. Extract complexity for each source file
   const allComplexities: FunctionComplexity[] = [];
   for (const filePath of sourceFiles) {
-    const source = await resolvedDeps.readFile(filePath);
+    const absolutePath = resolve(opts.cwd, filePath);
+    const source = await resolvedDeps.readFile(absolutePath);
     const fileComplexities = resolvedDeps.complexityPort.extract(
       source,
       filePath,
@@ -168,7 +170,12 @@ function resolveOptions(options?: AnalyzeOptions): ResolvedOptions {
   if (options?.include) {
     include = options.include;
   } else if (src) {
-    include = Array.isArray(src) ? src : [src];
+    // Convert source directories to glob patterns
+    const dirs = Array.isArray(src) ? src : [src];
+    include = dirs.flatMap((dir) => {
+      const normalized = dir.replace(/\/+$/, "");
+      return [`${normalized}/**/*.ts`, `${normalized}/**/*.tsx`];
+    });
   } else {
     include = defaultInclude;
   }
@@ -323,7 +330,7 @@ function emptyResult(thresholdConfig: ThresholdConfig): AnalysisResult {
   };
 }
 
-async function loadDefaults(): Promise<AnalyzeDeps> {
+async function loadDefaults(cwd?: string): Promise<AnalyzeDeps> {
   const { createDefaultDeps } = await import("./defaults.js");
-  return createDefaultDeps();
+  return createDefaultDeps(cwd);
 }

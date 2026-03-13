@@ -12,8 +12,12 @@ import type { CoveragePort } from "../ports/coverage-port.js";
 // ── Auto-Detecting Coverage Port ──────────────────────────────────
 
 class AutoDetectCoverageAdapter implements CoveragePort {
-  private readonly istanbul = new IstanbulCoverageAdapter();
+  private readonly istanbul: IstanbulCoverageAdapter;
   private readonly v8 = new V8CoverageAdapter();
+
+  constructor(cwd?: string) {
+    this.istanbul = new IstanbulCoverageAdapter(cwd);
+  }
 
   parse(data: unknown) {
     const format = detectCoverageFormat(data);
@@ -65,10 +69,10 @@ async function findFilesRecursive(
 
 // ── Default Dependencies ──────────────────────────────────────────
 
-export function createDefaultDeps(): AnalyzeDeps {
+export function createDefaultDeps(cwd?: string): AnalyzeDeps {
   return {
     complexityPort: new TypeScriptEslintComplexityAdapter(),
-    coveragePort: new AutoDetectCoverageAdapter(),
+    coveragePort: new AutoDetectCoverageAdapter(cwd),
     matcher: defaultSpanMatcher,
     globMatcher: (path: string, pattern: string) => picomatch(pattern)(path),
     readFile: async (path: string) => readFile(path, "utf-8"),
