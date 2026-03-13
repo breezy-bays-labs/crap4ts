@@ -149,7 +149,7 @@ program.action(async (opts: Record<string, unknown>) => {
         threshold,
         coverage: opts["coverage"] as string | undefined,
         format: opts["format"] as string | undefined,
-        noColor: opts["color"] === false, // commander negates --no-color to color=false
+        noColor: opts["color"] === false ? true : undefined, // only set when --no-color is explicit
         coverageMetric,
         include: opts["include"] as string[] | undefined,
         exclude: opts["exclude"] as string[] | undefined,
