@@ -135,7 +135,7 @@ export const defaultSpanMatcher: MatchFunctions = (
         return 0;
       });
 
-      const best = candidates[0];
+      const best = candidates[0]!;
       matched.push({ complexity: comp, coverage: best.cov });
       usedCoverage.add(best.cov);
     }
