@@ -10,6 +10,9 @@ const FUNCTION_TYPES = new Set([
   "ArrowFunctionExpression",
 ]);
 
+// AST property keys to skip during child traversal
+const SKIP_KEYS = new Set(["parent", "type", "loc", "range"]);
+
 // AST node types that add +1 to cyclomatic complexity
 const DECISION_TYPES = new Set([
   "IfStatement",
@@ -23,6 +26,10 @@ const DECISION_TYPES = new Set([
   "LogicalExpression",
   "ChainExpression",
 ]);
+
+function isASTNode(value: unknown): value is TSESTree.Node {
+  return value !== null && typeof value === "object" && "type" in value;
+}
 
 interface FunctionScope {
   qualifiedName: string;
@@ -59,69 +66,89 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
     results: FunctionComplexity[],
     nameContext: string[],
   ): void {
-    // Function declarations at top level
-    if (node.type === "FunctionDeclaration" && node.id) {
-      const scope = this.createScope(node.id.name, node, nameContext);
-      this.countComplexity(node.body!, scope);
-      results.push(this.toFunctionComplexity(scope, filePath));
-      return;
-    }
-
-    // export function foo() {}
-    if (node.type === "ExportNamedDeclaration" && node.declaration) {
-      this.walkTopLevel(node.declaration, filePath, results, nameContext);
-      return;
-    }
-
-    // export default function() {}
-    if (node.type === "ExportDefaultDeclaration" && node.declaration) {
-      if (
-        node.declaration.type === "FunctionDeclaration" ||
-        node.declaration.type === "FunctionExpression" ||
-        node.declaration.type === "ArrowFunctionExpression"
-      ) {
-        const name =
-          node.declaration.type === "FunctionDeclaration" && node.declaration.id
-            ? node.declaration.id.name
-            : "default";
-        const scope = this.createScope(name, node.declaration, nameContext);
-        this.countComplexityInFunction(node.declaration, scope);
-        results.push(this.toFunctionComplexity(scope, filePath));
+    switch (node.type) {
+      case "FunctionDeclaration":
+        this.handleFunctionDeclaration(node, filePath, results, nameContext);
         return;
-      }
-    }
-
-    // Variable declarations: const foo = () => {} or const foo = function() {}
-    if (node.type === "VariableDeclaration") {
-      for (const declarator of node.declarations) {
-        if (
-          declarator.id.type === "Identifier" &&
-          declarator.init &&
-          FUNCTION_TYPES.has(declarator.init.type)
-        ) {
-          const funcNode = declarator.init as
-            | TSESTree.FunctionExpression
-            | TSESTree.ArrowFunctionExpression;
-          const scope = this.createScope(
-            declarator.id.name,
-            // Use the variable declaration's location for the span
-            node,
-            nameContext,
-          );
-          this.countComplexityInFunction(funcNode, scope);
-          results.push(this.toFunctionComplexity(scope, filePath));
+      case "ExportNamedDeclaration":
+        if (node.declaration) {
+          this.walkTopLevel(node.declaration, filePath, results, nameContext);
         }
-      }
-      return;
+        return;
+      case "ExportDefaultDeclaration":
+        this.handleExportDefault(node, filePath, results, nameContext);
+        return;
+      case "VariableDeclaration":
+        this.handleVariableDeclaration(node, filePath, results, nameContext);
+        return;
+      case "ClassDeclaration":
+        if (node.id) {
+          this.walkClass(node, filePath, results, nameContext);
+        }
+        return;
     }
+  }
 
-    // Class declarations
+  private handleFunctionDeclaration(
+    node: TSESTree.FunctionDeclaration,
+    filePath: string,
+    results: FunctionComplexity[],
+    nameContext: string[],
+  ): void {
+    if (node.id && node.body) {
+      const scope = this.createScope(node.id.name, node, nameContext);
+      this.countComplexity(node.body, scope);
+      results.push(this.toFunctionComplexity(scope, filePath));
+    }
+  }
+
+  private handleExportDefault(
+    node: TSESTree.ExportDefaultDeclaration,
+    filePath: string,
+    results: FunctionComplexity[],
+    nameContext: string[],
+  ): void {
+    if (!node.declaration) return;
+
     if (
-      node.type === "ClassDeclaration" &&
-      node.id
+      node.declaration.type === "FunctionDeclaration" ||
+      node.declaration.type === "FunctionExpression" ||
+      node.declaration.type === "ArrowFunctionExpression"
     ) {
-      this.walkClass(node, filePath, results, nameContext);
-      return;
+      const name =
+        node.declaration.type === "FunctionDeclaration" && node.declaration.id
+          ? node.declaration.id.name
+          : "default";
+      const scope = this.createScope(name, node.declaration, nameContext);
+      this.countComplexityInFunction(node.declaration, scope);
+      results.push(this.toFunctionComplexity(scope, filePath));
+    }
+  }
+
+  private handleVariableDeclaration(
+    node: TSESTree.VariableDeclaration,
+    filePath: string,
+    results: FunctionComplexity[],
+    nameContext: string[],
+  ): void {
+    for (const declarator of node.declarations) {
+      if (
+        declarator.id.type === "Identifier" &&
+        declarator.init &&
+        FUNCTION_TYPES.has(declarator.init.type)
+      ) {
+        const funcNode = declarator.init as
+          | TSESTree.FunctionExpression
+          | TSESTree.ArrowFunctionExpression;
+        const scope = this.createScope(
+          declarator.id.name,
+          // Use the variable declaration's location for the span
+          node,
+          nameContext,
+        );
+        this.countComplexityInFunction(funcNode, scope);
+        results.push(this.toFunctionComplexity(scope, filePath));
+      }
     }
   }
 
@@ -190,12 +217,7 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
       | TSESTree.ArrowFunctionExpression,
     scope: FunctionScope,
   ): void {
-    if (node.body.type === "BlockStatement") {
-      this.countComplexity(node.body, scope);
-    } else {
-      // Arrow function with expression body
-      this.countComplexity(node.body, scope);
-    }
+    this.countComplexity(node.body, scope);
   }
 
   private countComplexity(
@@ -217,23 +239,27 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
       scope.complexity++;
     }
 
-    // Recurse into children
+    this.traverseChildren(node, scope);
+  }
+
+  private traverseChildren(
+    node: TSESTree.Node,
+    scope: FunctionScope,
+  ): void {
     for (const key of Object.keys(node)) {
-      if (key === "parent" || key === "type" || key === "loc" || key === "range") {
-        continue;
-      }
+      if (SKIP_KEYS.has(key)) continue;
 
       const value = (node as unknown as Record<string, unknown>)[key];
-      if (value && typeof value === "object") {
-        if (Array.isArray(value)) {
-          for (const item of value) {
-            if (item && typeof item === "object" && "type" in item) {
-              this.countComplexity(item as TSESTree.Node, scope);
-            }
+      if (!value || typeof value !== "object") continue;
+
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (isASTNode(item)) {
+            this.countComplexity(item, scope);
           }
-        } else if ("type" in value) {
-          this.countComplexity(value as TSESTree.Node, scope);
         }
+      } else if (isASTNode(value)) {
+        this.countComplexity(value, scope);
       }
     }
   }

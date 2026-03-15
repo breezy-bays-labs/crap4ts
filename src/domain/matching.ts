@@ -38,12 +38,59 @@ export function overlapRatio(a: SourceSpan, b: SourceSpan): number {
   return overlap / aLen;
 }
 
+// ── Candidate Types & Helpers ─────────────────────────────────────
+
+type Candidate = {
+  cov: FunctionCoverage;
+  ratio: number;
+  contains: boolean;
+  nameMatch: boolean;
+};
+
+function findCandidates(
+  compSpan: SourceSpan,
+  compName: string,
+  fileCoverages: ReadonlyArray<FunctionCoverage>,
+  usedCoverage: Set<FunctionCoverage>,
+  overlapThreshold: number,
+): Candidate[] {
+  const candidates: Candidate[] = [];
+  for (const cov of fileCoverages) {
+    if (usedCoverage.has(cov)) continue;
+    const ratio = overlapRatio(compSpan, cov.span);
+    if (ratio < overlapThreshold) continue;
+    candidates.push({
+      cov,
+      ratio,
+      contains: spanContains(cov.span, compSpan),
+      nameMatch: cov.name === compName,
+    });
+  }
+  return candidates;
+}
+
+function selectBestCandidate(candidates: ReadonlyArray<Candidate>): Candidate | undefined {
+  if (candidates.length === 0) return undefined;
+
+  let best = candidates[0]!;
+  for (let i = 1; i < candidates.length; i++) {
+    const c = candidates[i]!;
+    if (c.contains && !best.contains) { best = c; continue; }
+    if (!c.contains && best.contains) continue;
+    if (c.ratio > best.ratio) { best = c; continue; }
+    if (c.ratio < best.ratio) continue;
+    if (c.nameMatch && !best.nameMatch) { best = c; }
+  }
+
+  return best;
+}
+
 // ── Default Span Matcher ───────────────────────────────────────────
 
 /**
  * Groups items by a key function into a Map of arrays.
  */
-function groupBy<T>(items: ReadonlyArray<T>, key: (item: T) => string): Map<string, T[]> {
+export function groupBy<T>(items: ReadonlyArray<T>, key: (item: T) => string): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const item of items) {
     const k = key(item);
@@ -82,7 +129,7 @@ export const defaultSpanMatcher: MatchFunctions = (
   const unmatchedComplexity: FunctionComplexity[] = [];
   const unmatchedCoverage: FunctionCoverage[] = [];
 
-  // Track which coverage entries have been claimed (by file + index).
+  // Track which coverage entries have been claimed (by object reference).
   const usedCoverage = new Set<FunctionCoverage>();
 
   // Collect all file paths from both sides.
@@ -93,49 +140,20 @@ export const defaultSpanMatcher: MatchFunctions = (
     const fileCoverages = coverageByFile.get(file) ?? [];
 
     for (const comp of fileComplexities) {
-      const compSpan = comp.identity.span;
-      const compName = comp.identity.qualifiedName;
+      const candidates = findCandidates(
+        comp.identity.span,
+        comp.identity.qualifiedName,
+        fileCoverages,
+        usedCoverage,
+        OVERLAP_THRESHOLD,
+      );
 
-      // Find eligible candidates: overlap >= threshold and not already used.
-      type Candidate = {
-        cov: FunctionCoverage;
-        ratio: number;
-        contains: boolean;
-        nameMatch: boolean;
-      };
-
-      const candidates: Candidate[] = [];
-      for (const cov of fileCoverages) {
-        if (usedCoverage.has(cov)) continue;
-
-        const ratio = overlapRatio(compSpan, cov.span);
-        if (ratio < OVERLAP_THRESHOLD) continue;
-
-        candidates.push({
-          cov,
-          ratio,
-          contains: spanContains(cov.span, compSpan),
-          nameMatch: cov.name === compName,
-        });
-      }
-
-      if (candidates.length === 0) {
+      const best = selectBestCandidate(candidates);
+      if (!best) {
         unmatchedComplexity.push(comp);
         continue;
       }
 
-      // Sort candidates: containment first, then ratio desc, then name match.
-      candidates.sort((a, b) => {
-        // Prefer containment.
-        if (a.contains !== b.contains) return a.contains ? -1 : 1;
-        // Then higher overlap ratio.
-        if (a.ratio !== b.ratio) return b.ratio - a.ratio;
-        // Then name match as tiebreaker.
-        if (a.nameMatch !== b.nameMatch) return a.nameMatch ? -1 : 1;
-        return 0;
-      });
-
-      const best = candidates[0]!;
       matched.push({ complexity: comp, coverage: best.cov });
       usedCoverage.add(best.cov);
     }

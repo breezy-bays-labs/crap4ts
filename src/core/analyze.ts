@@ -4,6 +4,7 @@ import {
   createThresholdConfig,
   resolveThreshold,
 } from "../domain/threshold.js";
+import { groupBy } from "../domain/matching.js";
 import { computeSummary } from "../domain/summary.js";
 import {
   RiskLevel,
@@ -78,10 +79,7 @@ export async function analyze(
   }
 
   // 5. Flatten all coverage data
-  const allCoverages: FunctionCoverage[] = [];
-  for (const coverages of coverageData.values()) {
-    allCoverages.push(...coverages);
-  }
+  const allCoverages = flattenCoverages(coverageData);
 
   // 6. Match complexity with coverage
   const matchResult = resolvedDeps.matcher(allComplexities, allCoverages);
@@ -145,6 +143,14 @@ export async function analyze(
 
 // ── Internal Helpers ──────────────────────────────────────────────
 
+const DEFAULT_EXCLUDE = [
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/*.d.ts",
+  "**/*.test.ts",
+  "**/*.spec.ts",
+];
+
 interface ResolvedOptions {
   cwd: string;
   coveragePath: string | undefined;
@@ -155,39 +161,31 @@ interface ResolvedOptions {
   exclude: string[];
 }
 
-function resolveOptions(options?: AnalyzeOptions): ResolvedOptions {
-  const src = options?.src;
-  const defaultInclude = ["**/*.ts", "**/*.tsx"];
-  const defaultExclude = [
-    "**/node_modules/**",
-    "**/dist/**",
-    "**/*.d.ts",
-    "**/*.test.ts",
-    "**/*.spec.ts",
-  ];
+function resolveIncludePatterns(options?: AnalyzeOptions): string[] {
+  if (options?.include) return options.include;
 
-  let include: string[];
-  if (options?.include) {
-    include = options.include;
-  } else if (src) {
-    // Convert source directories to glob patterns
+  const src = options?.src;
+  if (src) {
     const dirs = Array.isArray(src) ? src : [src];
-    include = dirs.flatMap((dir) => {
+    return dirs.flatMap((dir) => {
       const normalized = dir.replace(/\/+$/, "");
       return [`${normalized}/**/*.ts`, `${normalized}/**/*.tsx`];
     });
-  } else {
-    include = defaultInclude;
   }
 
+  return ["**/*.ts", "**/*.tsx"];
+}
+
+function resolveOptions(options?: AnalyzeOptions): ResolvedOptions {
+  const opts = options ?? {};
   return {
-    cwd: options?.cwd ?? process.cwd(),
-    coveragePath: options?.coverage,
-    threshold: options?.threshold,
-    thresholds: options?.thresholds,
-    coverageMetric: options?.coverageMetric ?? "line",
-    include,
-    exclude: options?.exclude ?? defaultExclude,
+    cwd: opts.cwd ?? process.cwd(),
+    coveragePath: opts.coverage,
+    threshold: opts.threshold,
+    thresholds: opts.thresholds,
+    coverageMetric: opts.coverageMetric ?? "line",
+    include: resolveIncludePatterns(options),
+    exclude: opts.exclude ?? DEFAULT_EXCLUDE,
   };
 }
 
@@ -217,7 +215,17 @@ async function loadCoverageData(
   return deps.coveragePort.parse(rawData);
 }
 
-function extractCoveragePercent(
+export function flattenCoverages(
+  coverageData: Map<string, FunctionCoverage[]>,
+): FunctionCoverage[] {
+  const result: FunctionCoverage[] = [];
+  for (const coverages of coverageData.values()) {
+    result.push(...coverages);
+  }
+  return result;
+}
+
+export function extractCoveragePercent(
   coverage: FunctionCoverage,
   metric: "line" | "branch",
 ): number {
@@ -227,42 +235,20 @@ function extractCoveragePercent(
   return coverage.lineCoverage.percent;
 }
 
+function getUnmatchedFilePath(u: UnmatchedFunction): string {
+  return u.kind === "no-coverage"
+    ? u.complexity.identity.filePath
+    : u.coverage.filePath;
+}
+
 function buildFileResults(
   verdicts: FunctionVerdict[],
   unmatched: UnmatchedFunction[],
 ): FileResult[] {
-  // Group verdicts by file
-  const verdictsByFile = new Map<string, FunctionVerdict[]>();
-  for (const verdict of verdicts) {
-    const file = verdict.scored.identity.filePath;
-    let group = verdictsByFile.get(file);
-    if (!group) {
-      group = [];
-      verdictsByFile.set(file, group);
-    }
-    group.push(verdict);
-  }
+  const verdictsByFile = groupBy(verdicts, (v) => v.scored.identity.filePath);
+  const unmatchedByFile = groupBy(unmatched, getUnmatchedFilePath);
 
-  // Group unmatched by file
-  const unmatchedByFile = new Map<string, UnmatchedFunction[]>();
-  for (const u of unmatched) {
-    const file =
-      u.kind === "no-coverage"
-        ? u.complexity.identity.filePath
-        : u.coverage.filePath;
-    let group = unmatchedByFile.get(file);
-    if (!group) {
-      group = [];
-      unmatchedByFile.set(file, group);
-    }
-    group.push(u);
-  }
-
-  // Collect all file paths
-  const allFiles = new Set([
-    ...verdictsByFile.keys(),
-    ...unmatchedByFile.keys(),
-  ]);
+  const allFiles = new Set([...verdictsByFile.keys(), ...unmatchedByFile.keys()]);
 
   const results: FileResult[] = [];
   for (const filePath of allFiles) {
