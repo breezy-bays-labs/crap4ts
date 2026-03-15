@@ -106,6 +106,43 @@ describe("TypeScriptEslintComplexityAdapter", () => {
     });
   });
 
+  describe("class-functions.ts", () => {
+    it("extracts Calculator.add with CC=1", () => {
+      const results = analyzeFixture("class-functions.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "Calculator.add");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(1);
+    });
+
+    it("extracts Calculator.safeDivide with CC=2", () => {
+      const results = analyzeFixture("class-functions.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "Calculator.safeDivide");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(2);
+    });
+
+    it("extracts EventProcessor.handler as arrow property with CC=3", () => {
+      const results = analyzeFixture("class-functions.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "EventProcessor.handler");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(3);
+    });
+
+    it("extracts EventProcessor.process as function expression property with CC=1", () => {
+      const results = analyzeFixture("class-functions.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "EventProcessor.process");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(1);
+    });
+
+    it("reports correct span for class methods", () => {
+      const results = analyzeFixture("class-functions.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "Calculator.add");
+      expect(fn?.identity.span.startLine).toBeGreaterThan(0);
+      expect(fn?.identity.span.endLine).toBeGreaterThan(fn!.identity.span.startLine);
+    });
+  });
+
   describe("SourceSpan endLine conversion", () => {
     it("converts inclusive endLine to exclusive (domainEndLine = sourceEndLine + 1)", () => {
       const results = analyzeFixture("simple-functions.ts");
