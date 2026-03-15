@@ -34,43 +34,21 @@ export async function analyzeFile(
   deps?: AnalyzeDeps,
 ): Promise<FunctionVerdict[]> {
   const resolvedDeps = deps ?? (await loadDefaults());
-  const coverageMetric = options?.coverageMetric ?? "line";
+  const opts = options ?? {};
+  const coverageMetric = opts.coverageMetric ?? "line";
+  const thresholdConfig = createThresholdConfig({ preset: opts.threshold });
 
-  // 1. Build threshold config
-  const thresholdConfig = createThresholdConfig({
-    preset: options?.threshold,
-  });
-
-  // 2. Read source and extract complexity
   const source = await resolvedDeps.readFile(filePath);
   const complexities = resolvedDeps.complexityPort.extract(source, filePath);
+  if (complexities.length === 0) return [];
 
-  if (complexities.length === 0) {
-    return [];
-  }
-
-  // 3. Load coverage data if a path was provided
-  let coverageMap = new Map<string, FunctionCoverage[]>();
-  if (options?.coverage) {
-    const rawData = await resolvedDeps.readJson(options.coverage);
-    coverageMap = resolvedDeps.coveragePort.parse(rawData);
-  }
-
-  // 4. Flatten coverage entries
-  const allCoverages: FunctionCoverage[] = [];
-  for (const coverages of coverageMap.values()) {
-    allCoverages.push(...coverages);
-  }
-
-  // 5. Match complexity with coverage
+  const allCoverages = await loadFileCoverages(resolvedDeps, opts.coverage);
   const matchResult = resolvedDeps.matcher(complexities, allCoverages);
 
-  // 6. Score matched functions
   const verdicts: FunctionVerdict[] = matchResult.matched.map(({ complexity, coverage }) =>
     scoreMatchedFunction(complexity, coverage, coverageMetric, thresholdConfig, resolvedDeps.globMatcher),
   );
 
-  // 7. Score unmatched complexity at worst case (0% coverage)
   for (const complexity of matchResult.unmatchedComplexity) {
     verdicts.push(scoreUnmatchedFunction(complexity, thresholdConfig, resolvedDeps.globMatcher));
   }
@@ -121,6 +99,20 @@ function scoreUnmatchedFunction(
     threshold,
     exceeds: crap.value > threshold,
   };
+}
+
+async function loadFileCoverages(
+  deps: AnalyzeDeps,
+  coveragePath?: string,
+): Promise<FunctionCoverage[]> {
+  if (!coveragePath) return [];
+  const rawData = await deps.readJson(coveragePath);
+  const coverageMap = deps.coveragePort.parse(rawData);
+  const allCoverages: FunctionCoverage[] = [];
+  for (const coverages of coverageMap.values()) {
+    allCoverages.push(...coverages);
+  }
+  return allCoverages;
 }
 
 function extractCoveragePercent(

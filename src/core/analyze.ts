@@ -78,10 +78,7 @@ export async function analyze(
   }
 
   // 5. Flatten all coverage data
-  const allCoverages: FunctionCoverage[] = [];
-  for (const coverages of coverageData.values()) {
-    allCoverages.push(...coverages);
-  }
+  const allCoverages = flattenCoverages(coverageData);
 
   // 6. Match complexity with coverage
   const matchResult = resolvedDeps.matcher(allComplexities, allCoverages);
@@ -145,6 +142,14 @@ export async function analyze(
 
 // ── Internal Helpers ──────────────────────────────────────────────
 
+const DEFAULT_EXCLUDE = [
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/*.d.ts",
+  "**/*.test.ts",
+  "**/*.spec.ts",
+];
+
 interface ResolvedOptions {
   cwd: string;
   coveragePath: string | undefined;
@@ -171,20 +176,15 @@ function resolveIncludePatterns(options?: AnalyzeOptions): string[] {
 }
 
 function resolveOptions(options?: AnalyzeOptions): ResolvedOptions {
+  const opts = options ?? {};
   return {
-    cwd: options?.cwd ?? process.cwd(),
-    coveragePath: options?.coverage,
-    threshold: options?.threshold,
-    thresholds: options?.thresholds,
-    coverageMetric: options?.coverageMetric ?? "line",
+    cwd: opts.cwd ?? process.cwd(),
+    coveragePath: opts.coverage,
+    threshold: opts.threshold,
+    thresholds: opts.thresholds,
+    coverageMetric: opts.coverageMetric ?? "line",
     include: resolveIncludePatterns(options),
-    exclude: options?.exclude ?? [
-      "**/node_modules/**",
-      "**/dist/**",
-      "**/*.d.ts",
-      "**/*.test.ts",
-      "**/*.spec.ts",
-    ],
+    exclude: opts.exclude ?? DEFAULT_EXCLUDE,
   };
 }
 
@@ -212,6 +212,16 @@ async function loadCoverageData(
 
   const rawData = await deps.readJson(coveragePath);
   return deps.coveragePort.parse(rawData);
+}
+
+function flattenCoverages(
+  coverageData: Map<string, FunctionCoverage[]>,
+): FunctionCoverage[] {
+  const result: FunctionCoverage[] = [];
+  for (const coverages of coverageData.values()) {
+    result.push(...coverages);
+  }
+  return result;
 }
 
 function extractCoveragePercent(

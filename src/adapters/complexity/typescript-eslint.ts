@@ -10,6 +10,9 @@ const FUNCTION_TYPES = new Set([
   "ArrowFunctionExpression",
 ]);
 
+// AST property keys to skip during child traversal
+const SKIP_KEYS = new Set(["parent", "type", "loc", "range"]);
+
 // AST node types that add +1 to cyclomatic complexity
 const DECISION_TYPES = new Set([
   "IfStatement",
@@ -23,6 +26,10 @@ const DECISION_TYPES = new Set([
   "LogicalExpression",
   "ChainExpression",
 ]);
+
+function isASTNode(value: unknown): value is TSESTree.Node {
+  return value !== null && typeof value === "object" && "type" in value;
+}
 
 interface FunctionScope {
   qualifiedName: string;
@@ -240,21 +247,19 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
     scope: FunctionScope,
   ): void {
     for (const key of Object.keys(node)) {
-      if (key === "parent" || key === "type" || key === "loc" || key === "range") {
-        continue;
-      }
+      if (SKIP_KEYS.has(key)) continue;
 
       const value = (node as unknown as Record<string, unknown>)[key];
-      if (value && typeof value === "object") {
-        if (Array.isArray(value)) {
-          for (const item of value) {
-            if (item && typeof item === "object" && "type" in item) {
-              this.countComplexity(item as TSESTree.Node, scope);
-            }
+      if (!value || typeof value !== "object") continue;
+
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (isASTNode(item)) {
+            this.countComplexity(item, scope);
           }
-        } else if ("type" in value) {
-          this.countComplexity(value as TSESTree.Node, scope);
         }
+      } else if (isASTNode(value)) {
+        this.countComplexity(value, scope);
       }
     }
   }
