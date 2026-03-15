@@ -210,12 +210,7 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
       | TSESTree.ArrowFunctionExpression,
     scope: FunctionScope,
   ): void {
-    if (node.body.type === "BlockStatement") {
-      this.countComplexity(node.body, scope);
-    } else {
-      // Arrow function with expression body
-      this.countComplexity(node.body, scope);
-    }
+    this.countComplexity(node.body, scope);
   }
 
   private countComplexity(
@@ -237,7 +232,13 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
       scope.complexity++;
     }
 
-    // Recurse into children
+    this.traverseChildren(node, scope);
+  }
+
+  private traverseChildren(
+    node: TSESTree.Node,
+    scope: FunctionScope,
+  ): void {
     for (const key of Object.keys(node)) {
       if (key === "parent" || key === "type" || key === "loc" || key === "range") {
         continue;
