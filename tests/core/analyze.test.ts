@@ -589,4 +589,56 @@ describe("analyze", () => {
     expect(result.files).toEqual([]);
     expect(result.passed).toBe(true);
   });
+
+  describe("resolveOptions edge cases", () => {
+    it("converts single src string to include patterns", async () => {
+      const deps = createDeps();
+      const result = await analyze({ cwd: "/project", src: "lib" }, deps);
+      expect(result.passed).toBe(true);
+    });
+
+    it("converts multiple src array to include patterns", async () => {
+      const deps = createDeps();
+      const result = await analyze({ cwd: "/project", src: ["lib", "pkg"] }, deps);
+      expect(result.passed).toBe(true);
+    });
+
+    it("strips trailing slashes from src directories", async () => {
+      const findFilesPatterns: string[] = [];
+      const deps = createDeps({
+        findFiles: async (patterns) => {
+          findFilesPatterns.push(...patterns);
+          return [];
+        },
+      });
+      await analyze({ cwd: "/project", src: "lib/" }, deps);
+      expect(findFilesPatterns.some(p => p.startsWith("lib/"))).toBe(true);
+      expect(findFilesPatterns.every(p => !p.includes("//"))).toBe(true);
+    });
+
+    it("uses explicit include over src", async () => {
+      const findFilesPatterns: string[] = [];
+      const deps = createDeps({
+        findFiles: async (patterns) => {
+          findFilesPatterns.push(...patterns);
+          return [];
+        },
+      });
+      await analyze({ cwd: "/project", include: ["custom/**/*.ts"], src: "ignored" }, deps);
+      expect(findFilesPatterns).toContain("custom/**/*.ts");
+    });
+
+    it("uses default exclude patterns when none specified", async () => {
+      let excludePatterns: string[] = [];
+      const deps = createDeps({
+        findFiles: async (_, options) => {
+          excludePatterns = options.exclude;
+          return [];
+        },
+      });
+      await analyze({ cwd: "/project" }, deps);
+      expect(excludePatterns).toContain("**/node_modules/**");
+      expect(excludePatterns).toContain("**/*.test.ts");
+    });
+  });
 });
