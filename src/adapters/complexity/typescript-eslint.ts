@@ -95,9 +95,9 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
     results: FunctionComplexity[],
     nameContext: string[],
   ): void {
-    if (node.id) {
+    if (node.id && node.body) {
       const scope = this.createScope(node.id.name, node, nameContext);
-      this.countComplexity(node.body!, scope);
+      this.countComplexity(node.body, scope);
       results.push(this.toFunctionComplexity(scope, filePath));
     }
   }

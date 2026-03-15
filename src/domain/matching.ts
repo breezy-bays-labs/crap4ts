@@ -69,17 +69,17 @@ function findCandidates(
   return candidates;
 }
 
-function selectBestCandidate(candidates: Candidate[]): Candidate | undefined {
+function selectBestCandidate(candidates: ReadonlyArray<Candidate>): Candidate | undefined {
   if (candidates.length === 0) return undefined;
 
-  candidates.sort((a, b) => {
+  const sorted = [...candidates].sort((a, b) => {
     if (a.contains !== b.contains) return a.contains ? -1 : 1;
     if (a.ratio !== b.ratio) return b.ratio - a.ratio;
     if (a.nameMatch !== b.nameMatch) return a.nameMatch ? -1 : 1;
     return 0;
   });
 
-  return candidates[0];
+  return sorted[0];
 }
 
 // ── Default Span Matcher ───────────────────────────────────────────
@@ -126,7 +126,7 @@ export const defaultSpanMatcher: MatchFunctions = (
   const unmatchedComplexity: FunctionComplexity[] = [];
   const unmatchedCoverage: FunctionCoverage[] = [];
 
-  // Track which coverage entries have been claimed (by file + index).
+  // Track which coverage entries have been claimed (by object reference).
   const usedCoverage = new Set<FunctionCoverage>();
 
   // Collect all file paths from both sides.
