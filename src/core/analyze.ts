@@ -155,39 +155,36 @@ interface ResolvedOptions {
   exclude: string[];
 }
 
-function resolveOptions(options?: AnalyzeOptions): ResolvedOptions {
-  const src = options?.src;
-  const defaultInclude = ["**/*.ts", "**/*.tsx"];
-  const defaultExclude = [
-    "**/node_modules/**",
-    "**/dist/**",
-    "**/*.d.ts",
-    "**/*.test.ts",
-    "**/*.spec.ts",
-  ];
+function resolveIncludePatterns(options?: AnalyzeOptions): string[] {
+  if (options?.include) return options.include;
 
-  let include: string[];
-  if (options?.include) {
-    include = options.include;
-  } else if (src) {
-    // Convert source directories to glob patterns
+  const src = options?.src;
+  if (src) {
     const dirs = Array.isArray(src) ? src : [src];
-    include = dirs.flatMap((dir) => {
+    return dirs.flatMap((dir) => {
       const normalized = dir.replace(/\/+$/, "");
       return [`${normalized}/**/*.ts`, `${normalized}/**/*.tsx`];
     });
-  } else {
-    include = defaultInclude;
   }
 
+  return ["**/*.ts", "**/*.tsx"];
+}
+
+function resolveOptions(options?: AnalyzeOptions): ResolvedOptions {
   return {
     cwd: options?.cwd ?? process.cwd(),
     coveragePath: options?.coverage,
     threshold: options?.threshold,
     thresholds: options?.thresholds,
     coverageMetric: options?.coverageMetric ?? "line",
-    include,
-    exclude: options?.exclude ?? defaultExclude,
+    include: resolveIncludePatterns(options),
+    exclude: options?.exclude ?? [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/*.d.ts",
+      "**/*.test.ts",
+      "**/*.spec.ts",
+    ],
   };
 }
 
