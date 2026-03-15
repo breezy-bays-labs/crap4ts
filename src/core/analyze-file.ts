@@ -8,7 +8,6 @@ import type {
   FunctionComplexity,
   FunctionCoverage,
   FunctionVerdict,
-  ScoredFunction,
   ThresholdConfig,
 } from "../domain/types.js";
 import type { AnalyzeDeps } from "./analyze.js";
