@@ -38,6 +38,50 @@ export function overlapRatio(a: SourceSpan, b: SourceSpan): number {
   return overlap / aLen;
 }
 
+// ── Candidate Types & Helpers ─────────────────────────────────────
+
+type Candidate = {
+  cov: FunctionCoverage;
+  ratio: number;
+  contains: boolean;
+  nameMatch: boolean;
+};
+
+function findCandidates(
+  compSpan: SourceSpan,
+  compName: string,
+  fileCoverages: ReadonlyArray<FunctionCoverage>,
+  usedCoverage: Set<FunctionCoverage>,
+  overlapThreshold: number,
+): Candidate[] {
+  const candidates: Candidate[] = [];
+  for (const cov of fileCoverages) {
+    if (usedCoverage.has(cov)) continue;
+    const ratio = overlapRatio(compSpan, cov.span);
+    if (ratio < overlapThreshold) continue;
+    candidates.push({
+      cov,
+      ratio,
+      contains: spanContains(cov.span, compSpan),
+      nameMatch: cov.name === compName,
+    });
+  }
+  return candidates;
+}
+
+function selectBestCandidate(candidates: Candidate[]): Candidate | undefined {
+  if (candidates.length === 0) return undefined;
+
+  candidates.sort((a, b) => {
+    if (a.contains !== b.contains) return a.contains ? -1 : 1;
+    if (a.ratio !== b.ratio) return b.ratio - a.ratio;
+    if (a.nameMatch !== b.nameMatch) return a.nameMatch ? -1 : 1;
+    return 0;
+  });
+
+  return candidates[0];
+}
+
 // ── Default Span Matcher ───────────────────────────────────────────
 
 /**
@@ -93,49 +137,20 @@ export const defaultSpanMatcher: MatchFunctions = (
     const fileCoverages = coverageByFile.get(file) ?? [];
 
     for (const comp of fileComplexities) {
-      const compSpan = comp.identity.span;
-      const compName = comp.identity.qualifiedName;
+      const candidates = findCandidates(
+        comp.identity.span,
+        comp.identity.qualifiedName,
+        fileCoverages,
+        usedCoverage,
+        OVERLAP_THRESHOLD,
+      );
 
-      // Find eligible candidates: overlap >= threshold and not already used.
-      type Candidate = {
-        cov: FunctionCoverage;
-        ratio: number;
-        contains: boolean;
-        nameMatch: boolean;
-      };
-
-      const candidates: Candidate[] = [];
-      for (const cov of fileCoverages) {
-        if (usedCoverage.has(cov)) continue;
-
-        const ratio = overlapRatio(compSpan, cov.span);
-        if (ratio < OVERLAP_THRESHOLD) continue;
-
-        candidates.push({
-          cov,
-          ratio,
-          contains: spanContains(cov.span, compSpan),
-          nameMatch: cov.name === compName,
-        });
-      }
-
-      if (candidates.length === 0) {
+      const best = selectBestCandidate(candidates);
+      if (!best) {
         unmatchedComplexity.push(comp);
         continue;
       }
 
-      // Sort candidates: containment first, then ratio desc, then name match.
-      candidates.sort((a, b) => {
-        // Prefer containment.
-        if (a.contains !== b.contains) return a.contains ? -1 : 1;
-        // Then higher overlap ratio.
-        if (a.ratio !== b.ratio) return b.ratio - a.ratio;
-        // Then name match as tiebreaker.
-        if (a.nameMatch !== b.nameMatch) return a.nameMatch ? -1 : 1;
-        return 0;
-      });
-
-      const best = candidates[0]!;
       matched.push({ complexity: comp, coverage: best.cov });
       usedCoverage.add(best.cov);
     }
