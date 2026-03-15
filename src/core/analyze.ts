@@ -224,42 +224,37 @@ function extractCoveragePercent(
   return coverage.lineCoverage.percent;
 }
 
+function groupByFile<T>(
+  items: T[],
+  getFile: (item: T) => string,
+): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const file = getFile(item);
+    let group = map.get(file);
+    if (!group) {
+      group = [];
+      map.set(file, group);
+    }
+    group.push(item);
+  }
+  return map;
+}
+
+function getUnmatchedFilePath(u: UnmatchedFunction): string {
+  return u.kind === "no-coverage"
+    ? u.complexity.identity.filePath
+    : u.coverage.filePath;
+}
+
 function buildFileResults(
   verdicts: FunctionVerdict[],
   unmatched: UnmatchedFunction[],
 ): FileResult[] {
-  // Group verdicts by file
-  const verdictsByFile = new Map<string, FunctionVerdict[]>();
-  for (const verdict of verdicts) {
-    const file = verdict.scored.identity.filePath;
-    let group = verdictsByFile.get(file);
-    if (!group) {
-      group = [];
-      verdictsByFile.set(file, group);
-    }
-    group.push(verdict);
-  }
+  const verdictsByFile = groupByFile(verdicts, (v) => v.scored.identity.filePath);
+  const unmatchedByFile = groupByFile(unmatched, getUnmatchedFilePath);
 
-  // Group unmatched by file
-  const unmatchedByFile = new Map<string, UnmatchedFunction[]>();
-  for (const u of unmatched) {
-    const file =
-      u.kind === "no-coverage"
-        ? u.complexity.identity.filePath
-        : u.coverage.filePath;
-    let group = unmatchedByFile.get(file);
-    if (!group) {
-      group = [];
-      unmatchedByFile.set(file, group);
-    }
-    group.push(u);
-  }
-
-  // Collect all file paths
-  const allFiles = new Set([
-    ...verdictsByFile.keys(),
-    ...unmatchedByFile.keys(),
-  ]);
+  const allFiles = new Set([...verdictsByFile.keys(), ...unmatchedByFile.keys()]);
 
   const results: FileResult[] = [];
   for (const filePath of allFiles) {
