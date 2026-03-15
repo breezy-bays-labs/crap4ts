@@ -143,6 +143,60 @@ describe("TypeScriptEslintComplexityAdapter", () => {
     });
   });
 
+  describe("export-patterns.ts", () => {
+    it("extracts exported named function greet with CC=1", () => {
+      const results = analyzeFixture("export-patterns.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "greet");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(1);
+    });
+
+    it("extracts const arrow function double with CC=1", () => {
+      const results = analyzeFixture("export-patterns.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "double");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(1);
+    });
+
+    it("extracts const function expression triple with CC=1", () => {
+      const results = analyzeFixture("export-patterns.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "triple");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(1);
+    });
+
+    it("does not extract non-function constants", () => {
+      const results = analyzeFixture("export-patterns.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "PI");
+      expect(fn).toBeUndefined();
+    });
+  });
+
+  describe("export default function", () => {
+    it("extracts export default function with name", () => {
+      const source = "export default function myDefault() { return 1; }";
+      const results = adapter.extract(source, "test.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "myDefault");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(1);
+    });
+
+    it("extracts export default anonymous function as 'default'", () => {
+      const source = "export default function() { return 1; }";
+      const results = adapter.extract(source, "test.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "default");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(1);
+    });
+
+    it("extracts export default arrow function as 'default'", () => {
+      const source = "export default () => { return 1; }";
+      const results = adapter.extract(source, "test.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "default");
+      expect(fn).toBeDefined();
+    });
+  });
+
   describe("SourceSpan endLine conversion", () => {
     it("converts inclusive endLine to exclusive (domainEndLine = sourceEndLine + 1)", () => {
       const results = analyzeFixture("simple-functions.ts");
