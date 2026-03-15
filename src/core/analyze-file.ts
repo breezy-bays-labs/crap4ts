@@ -3,10 +3,13 @@ import {
   createThresholdConfig,
   resolveThreshold,
 } from "../domain/threshold.js";
+import type { GlobMatcher } from "../domain/threshold.js";
 import type {
+  FunctionComplexity,
   FunctionCoverage,
   FunctionVerdict,
   ScoredFunction,
+  ThresholdConfig,
 } from "../domain/types.js";
 import type { AnalyzeDeps } from "./analyze.js";
 
@@ -63,59 +66,63 @@ export async function analyzeFile(
   // 5. Match complexity with coverage
   const matchResult = resolvedDeps.matcher(complexities, allCoverages);
 
-  const verdicts: FunctionVerdict[] = [];
-
   // 6. Score matched functions
-  for (const { complexity, coverage } of matchResult.matched) {
-    const coveragePercent = extractCoveragePercent(coverage, coverageMetric);
-    const crap = computeCrap(complexity.cyclomaticComplexity, coveragePercent);
-    const threshold = resolveThreshold(
-      thresholdConfig,
-      complexity.identity.filePath,
-      resolvedDeps.globMatcher,
-    );
-
-    const scored: ScoredFunction = {
-      identity: complexity.identity,
-      cyclomaticComplexity: complexity.cyclomaticComplexity,
-      coveragePercent,
-      crap,
-    };
-
-    verdicts.push({
-      scored,
-      threshold,
-      exceeds: crap.value > threshold,
-    });
-  }
+  const verdicts: FunctionVerdict[] = matchResult.matched.map(({ complexity, coverage }) =>
+    scoreMatchedFunction(complexity, coverage, coverageMetric, thresholdConfig, resolvedDeps.globMatcher),
+  );
 
   // 7. Score unmatched complexity at worst case (0% coverage)
   for (const complexity of matchResult.unmatchedComplexity) {
-    const crap = computeCrap(complexity.cyclomaticComplexity, 0);
-    const threshold = resolveThreshold(
-      thresholdConfig,
-      complexity.identity.filePath,
-      resolvedDeps.globMatcher,
-    );
-
-    const scored: ScoredFunction = {
-      identity: complexity.identity,
-      cyclomaticComplexity: complexity.cyclomaticComplexity,
-      coveragePercent: 0,
-      crap,
-    };
-
-    verdicts.push({
-      scored,
-      threshold,
-      exceeds: crap.value > threshold,
-    });
+    verdicts.push(scoreUnmatchedFunction(complexity, thresholdConfig, resolvedDeps.globMatcher));
   }
 
   return verdicts;
 }
 
 // ── Internal Helpers ──────────────────────────────────────────────
+
+function scoreMatchedFunction(
+  complexity: FunctionComplexity,
+  coverage: FunctionCoverage,
+  coverageMetric: "line" | "branch",
+  thresholdConfig: ThresholdConfig,
+  globMatcher: GlobMatcher,
+): FunctionVerdict {
+  const coveragePercent = extractCoveragePercent(coverage, coverageMetric);
+  const crap = computeCrap(complexity.cyclomaticComplexity, coveragePercent);
+  const threshold = resolveThreshold(thresholdConfig, complexity.identity.filePath, globMatcher);
+
+  return {
+    scored: {
+      identity: complexity.identity,
+      cyclomaticComplexity: complexity.cyclomaticComplexity,
+      coveragePercent,
+      crap,
+    },
+    threshold,
+    exceeds: crap.value > threshold,
+  };
+}
+
+function scoreUnmatchedFunction(
+  complexity: FunctionComplexity,
+  thresholdConfig: ThresholdConfig,
+  globMatcher: GlobMatcher,
+): FunctionVerdict {
+  const crap = computeCrap(complexity.cyclomaticComplexity, 0);
+  const threshold = resolveThreshold(thresholdConfig, complexity.identity.filePath, globMatcher);
+
+  return {
+    scored: {
+      identity: complexity.identity,
+      cyclomaticComplexity: complexity.cyclomaticComplexity,
+      coveragePercent: 0,
+      crap,
+    },
+    threshold,
+    exceeds: crap.value > threshold,
+  };
+}
 
 function extractCoveragePercent(
   coverage: FunctionCoverage,
