@@ -10,6 +10,7 @@ import type {
   FunctionVerdict,
   ThresholdConfig,
 } from "../domain/types.js";
+import { extractCoveragePercent, flattenCoverages } from "./analyze.js";
 import type { AnalyzeDeps } from "./analyze.js";
 
 // ── Single-File Analysis ──────────────────────────────────────────
@@ -108,21 +109,7 @@ async function loadFileCoverages(
   if (!coveragePath) return [];
   const rawData = await deps.readJson(coveragePath);
   const coverageMap = deps.coveragePort.parse(rawData);
-  const allCoverages: FunctionCoverage[] = [];
-  for (const coverages of coverageMap.values()) {
-    allCoverages.push(...coverages);
-  }
-  return allCoverages;
-}
-
-function extractCoveragePercent(
-  coverage: FunctionCoverage,
-  metric: "line" | "branch",
-): number {
-  if (metric === "branch" && coverage.branchCoverage !== null) {
-    return coverage.branchCoverage.percent;
-  }
-  return coverage.lineCoverage.percent;
+  return flattenCoverages(coverageMap);
 }
 
 async function loadDefaults(): Promise<AnalyzeDeps> {

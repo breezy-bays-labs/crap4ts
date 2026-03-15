@@ -72,14 +72,17 @@ function findCandidates(
 function selectBestCandidate(candidates: ReadonlyArray<Candidate>): Candidate | undefined {
   if (candidates.length === 0) return undefined;
 
-  const sorted = [...candidates].sort((a, b) => {
-    if (a.contains !== b.contains) return a.contains ? -1 : 1;
-    if (a.ratio !== b.ratio) return b.ratio - a.ratio;
-    if (a.nameMatch !== b.nameMatch) return a.nameMatch ? -1 : 1;
-    return 0;
-  });
+  let best = candidates[0]!;
+  for (let i = 1; i < candidates.length; i++) {
+    const c = candidates[i]!;
+    if (c.contains && !best.contains) { best = c; continue; }
+    if (!c.contains && best.contains) continue;
+    if (c.ratio > best.ratio) { best = c; continue; }
+    if (c.ratio < best.ratio) continue;
+    if (c.nameMatch && !best.nameMatch) { best = c; }
+  }
 
-  return sorted[0];
+  return best;
 }
 
 // ── Default Span Matcher ───────────────────────────────────────────
@@ -87,7 +90,7 @@ function selectBestCandidate(candidates: ReadonlyArray<Candidate>): Candidate | 
 /**
  * Groups items by a key function into a Map of arrays.
  */
-function groupBy<T>(items: ReadonlyArray<T>, key: (item: T) => string): Map<string, T[]> {
+export function groupBy<T>(items: ReadonlyArray<T>, key: (item: T) => string): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const item of items) {
     const k = key(item);

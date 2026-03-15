@@ -4,6 +4,7 @@ import {
   createThresholdConfig,
   resolveThreshold,
 } from "../domain/threshold.js";
+import { groupBy } from "../domain/matching.js";
 import { computeSummary } from "../domain/summary.js";
 import {
   RiskLevel,
@@ -214,7 +215,7 @@ async function loadCoverageData(
   return deps.coveragePort.parse(rawData);
 }
 
-function flattenCoverages(
+export function flattenCoverages(
   coverageData: Map<string, FunctionCoverage[]>,
 ): FunctionCoverage[] {
   const result: FunctionCoverage[] = [];
@@ -224,7 +225,7 @@ function flattenCoverages(
   return result;
 }
 
-function extractCoveragePercent(
+export function extractCoveragePercent(
   coverage: FunctionCoverage,
   metric: "line" | "branch",
 ): number {
@@ -232,23 +233,6 @@ function extractCoveragePercent(
     return coverage.branchCoverage.percent;
   }
   return coverage.lineCoverage.percent;
-}
-
-function groupByFile<T>(
-  items: T[],
-  getFile: (item: T) => string,
-): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  for (const item of items) {
-    const file = getFile(item);
-    let group = map.get(file);
-    if (!group) {
-      group = [];
-      map.set(file, group);
-    }
-    group.push(item);
-  }
-  return map;
 }
 
 function getUnmatchedFilePath(u: UnmatchedFunction): string {
@@ -261,8 +245,8 @@ function buildFileResults(
   verdicts: FunctionVerdict[],
   unmatched: UnmatchedFunction[],
 ): FileResult[] {
-  const verdictsByFile = groupByFile(verdicts, (v) => v.scored.identity.filePath);
-  const unmatchedByFile = groupByFile(unmatched, getUnmatchedFilePath);
+  const verdictsByFile = groupBy(verdicts, (v) => v.scored.identity.filePath);
+  const unmatchedByFile = groupBy(unmatched, getUnmatchedFilePath);
 
   const allFiles = new Set([...verdictsByFile.keys(), ...unmatchedByFile.keys()]);
 
