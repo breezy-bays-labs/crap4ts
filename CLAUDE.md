@@ -46,3 +46,28 @@ fix(domain):   test:         ci:              docs:        chore:
 - `vitest.config.ts` — Test configuration
 - `crap4ts.config.ts` — Local dev config (not committed by default)
 - `eslint.config.ts` — Flat ESLint config
+
+## Rule Maintenance
+
+Scoped rules live in `.claude/rules/` and load on-demand when matching files are touched.
+
+- When you discover a new pattern, convention, or risk specific to a layer (domain, adapters, core, cli, tests), update the relevant rule file.
+- When a rule becomes stale or contradicts current code, update or remove it.
+- Keep rules actionable and concise — each point should prevent a concrete mistake.
+
+## Compact Instructions
+
+During context compaction, preserve:
+
+- Architecture layer and dependency direction constraints
+- Current task context, plan progress, and blocking issues
+- File paths and line numbers actively being worked on
+- Test results and CRAP scores from the most recent verification run
+- Any user feedback or corrections given during the session
+
+During context compaction, discard:
+
+- Full file contents already committed (re-read from disk if needed)
+- Intermediate failed attempts that were superseded by working solutions
+- Verbose tool output that has already been summarized
+- Completed and merged PR details (check git log if needed)
