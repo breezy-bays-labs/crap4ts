@@ -197,6 +197,26 @@ describe("TypeScriptEslintComplexityAdapter", () => {
     });
   });
 
+  describe("refactoring safety net", () => {
+    it("produces identical results for simple-functions.ts before and after refactor", () => {
+      const results = analyzeFixture("simple-functions.ts");
+      expect(results).toHaveLength(3);
+      expect(results.map(r => [r.identity.qualifiedName, r.cyclomaticComplexity])).toEqual([
+        ["identity", 1],
+        ["abs", 2],
+        ["classify", 3],
+      ]);
+    });
+
+    it("produces identical results for complex-functions.ts before and after refactor", () => {
+      const results = analyzeFixture("complex-functions.ts");
+      const nameCC = results.map(r => [r.identity.qualifiedName, r.cyclomaticComplexity]);
+      expect(nameCC).toContainEqual(["dayType", 4]);
+      expect(nameCC).toContainEqual(["validate", 4]);
+      expect(nameCC).toContainEqual(["sumPositive", 3]);
+    });
+  });
+
   describe("SourceSpan endLine conversion", () => {
     it("converts inclusive endLine to exclusive (domainEndLine = sourceEndLine + 1)", () => {
       const results = analyzeFixture("simple-functions.ts");

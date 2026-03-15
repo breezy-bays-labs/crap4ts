@@ -59,69 +59,89 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
     results: FunctionComplexity[],
     nameContext: string[],
   ): void {
-    // Function declarations at top level
-    if (node.type === "FunctionDeclaration" && node.id) {
+    switch (node.type) {
+      case "FunctionDeclaration":
+        this.handleFunctionDeclaration(node, filePath, results, nameContext);
+        return;
+      case "ExportNamedDeclaration":
+        if (node.declaration) {
+          this.walkTopLevel(node.declaration, filePath, results, nameContext);
+        }
+        return;
+      case "ExportDefaultDeclaration":
+        this.handleExportDefault(node, filePath, results, nameContext);
+        return;
+      case "VariableDeclaration":
+        this.handleVariableDeclaration(node, filePath, results, nameContext);
+        return;
+      case "ClassDeclaration":
+        if (node.id) {
+          this.walkClass(node, filePath, results, nameContext);
+        }
+        return;
+    }
+  }
+
+  private handleFunctionDeclaration(
+    node: TSESTree.FunctionDeclaration,
+    filePath: string,
+    results: FunctionComplexity[],
+    nameContext: string[],
+  ): void {
+    if (node.id) {
       const scope = this.createScope(node.id.name, node, nameContext);
       this.countComplexity(node.body!, scope);
       results.push(this.toFunctionComplexity(scope, filePath));
-      return;
     }
+  }
 
-    // export function foo() {}
-    if (node.type === "ExportNamedDeclaration" && node.declaration) {
-      this.walkTopLevel(node.declaration, filePath, results, nameContext);
-      return;
-    }
+  private handleExportDefault(
+    node: TSESTree.ExportDefaultDeclaration,
+    filePath: string,
+    results: FunctionComplexity[],
+    nameContext: string[],
+  ): void {
+    if (!node.declaration) return;
 
-    // export default function() {}
-    if (node.type === "ExportDefaultDeclaration" && node.declaration) {
-      if (
-        node.declaration.type === "FunctionDeclaration" ||
-        node.declaration.type === "FunctionExpression" ||
-        node.declaration.type === "ArrowFunctionExpression"
-      ) {
-        const name =
-          node.declaration.type === "FunctionDeclaration" && node.declaration.id
-            ? node.declaration.id.name
-            : "default";
-        const scope = this.createScope(name, node.declaration, nameContext);
-        this.countComplexityInFunction(node.declaration, scope);
-        results.push(this.toFunctionComplexity(scope, filePath));
-        return;
-      }
-    }
-
-    // Variable declarations: const foo = () => {} or const foo = function() {}
-    if (node.type === "VariableDeclaration") {
-      for (const declarator of node.declarations) {
-        if (
-          declarator.id.type === "Identifier" &&
-          declarator.init &&
-          FUNCTION_TYPES.has(declarator.init.type)
-        ) {
-          const funcNode = declarator.init as
-            | TSESTree.FunctionExpression
-            | TSESTree.ArrowFunctionExpression;
-          const scope = this.createScope(
-            declarator.id.name,
-            // Use the variable declaration's location for the span
-            node,
-            nameContext,
-          );
-          this.countComplexityInFunction(funcNode, scope);
-          results.push(this.toFunctionComplexity(scope, filePath));
-        }
-      }
-      return;
-    }
-
-    // Class declarations
     if (
-      node.type === "ClassDeclaration" &&
-      node.id
+      node.declaration.type === "FunctionDeclaration" ||
+      node.declaration.type === "FunctionExpression" ||
+      node.declaration.type === "ArrowFunctionExpression"
     ) {
-      this.walkClass(node, filePath, results, nameContext);
-      return;
+      const name =
+        node.declaration.type === "FunctionDeclaration" && node.declaration.id
+          ? node.declaration.id.name
+          : "default";
+      const scope = this.createScope(name, node.declaration, nameContext);
+      this.countComplexityInFunction(node.declaration, scope);
+      results.push(this.toFunctionComplexity(scope, filePath));
+    }
+  }
+
+  private handleVariableDeclaration(
+    node: TSESTree.VariableDeclaration,
+    filePath: string,
+    results: FunctionComplexity[],
+    nameContext: string[],
+  ): void {
+    for (const declarator of node.declarations) {
+      if (
+        declarator.id.type === "Identifier" &&
+        declarator.init &&
+        FUNCTION_TYPES.has(declarator.init.type)
+      ) {
+        const funcNode = declarator.init as
+          | TSESTree.FunctionExpression
+          | TSESTree.ArrowFunctionExpression;
+        const scope = this.createScope(
+          declarator.id.name,
+          // Use the variable declaration's location for the span
+          node,
+          nameContext,
+        );
+        this.countComplexityInFunction(funcNode, scope);
+        results.push(this.toFunctionComplexity(scope, filePath));
+      }
     }
   }
 
