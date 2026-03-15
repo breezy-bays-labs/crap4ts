@@ -592,15 +592,31 @@ describe("analyze", () => {
 
   describe("resolveOptions edge cases", () => {
     it("converts single src string to include patterns", async () => {
-      const deps = createDeps();
-      const result = await analyze({ cwd: "/project", src: "lib" }, deps);
-      expect(result.passed).toBe(true);
+      const findFilesPatterns: string[] = [];
+      const deps = createDeps({
+        findFiles: async (patterns) => {
+          findFilesPatterns.push(...patterns);
+          return [];
+        },
+      });
+      await analyze({ cwd: "/project", src: "lib" }, deps);
+      expect(findFilesPatterns).toContain("lib/**/*.ts");
+      expect(findFilesPatterns).toContain("lib/**/*.tsx");
     });
 
     it("converts multiple src array to include patterns", async () => {
-      const deps = createDeps();
-      const result = await analyze({ cwd: "/project", src: ["lib", "pkg"] }, deps);
-      expect(result.passed).toBe(true);
+      const findFilesPatterns: string[] = [];
+      const deps = createDeps({
+        findFiles: async (patterns) => {
+          findFilesPatterns.push(...patterns);
+          return [];
+        },
+      });
+      await analyze({ cwd: "/project", src: ["lib", "pkg"] }, deps);
+      expect(findFilesPatterns).toContain("lib/**/*.ts");
+      expect(findFilesPatterns).toContain("lib/**/*.tsx");
+      expect(findFilesPatterns).toContain("pkg/**/*.ts");
+      expect(findFilesPatterns).toContain("pkg/**/*.tsx");
     });
 
     it("strips trailing slashes from src directories", async () => {
@@ -626,6 +642,7 @@ describe("analyze", () => {
       });
       await analyze({ cwd: "/project", include: ["custom/**/*.ts"], src: "ignored" }, deps);
       expect(findFilesPatterns).toContain("custom/**/*.ts");
+      expect(findFilesPatterns).not.toContain("ignored/**/*.ts");
     });
 
     it("uses default exclude patterns when none specified", async () => {
