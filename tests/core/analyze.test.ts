@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { analyze } from "../../src/core/analyze.js";
+import { analyze, extractCoveragePercent } from "../../src/core/analyze.js";
 import type {
   FunctionComplexity,
   FunctionCoverage,
@@ -447,7 +447,7 @@ describe("analyze", () => {
     expect(branchResult.functions[0]!.scored.coveragePercent).toBe(50);
   });
 
-  it("falls back to line coverage when branch is requested but null", async () => {
+  it("defaults to 100% when branch metric requested but function has no branches", async () => {
     const comp = makeComplexity("src/x.ts", "fn", 2, span(1, 10));
     const cov: FunctionCoverage = {
       filePath: "src/x.ts",
@@ -470,8 +470,8 @@ describe("analyze", () => {
       { cwd: "/project", coverageMetric: "branch" },
       deps,
     );
-    // Falls back to line coverage since branchCoverage is null
-    expect(result.functions[0]!.scored.coveragePercent).toBe(80);
+    // No branches means fully covered — should be 100%, not line coverage fallback
+    expect(result.functions[0]!.scored.coveragePercent).toBe(100);
   });
 
   it("changedSince option filters to only changed files", async () => {
@@ -688,5 +688,41 @@ describe("analyze", () => {
 
     expect(receivedSources).toBeDefined();
     expect(receivedSources!.get("src/math.ts")).toBe(sourceContent);
+  });
+});
+
+describe("extractCoveragePercent", () => {
+  it("returns line coverage percent when metric is 'line'", () => {
+    const cov: FunctionCoverage = {
+      filePath: "src/x.ts",
+      name: "fn",
+      span: span(1, 10),
+      lineCoverage: ratio(7, 10), // 70%
+      branchCoverage: ratio(3, 10), // 30%
+    };
+    expect(extractCoveragePercent(cov, "line")).toBe(70);
+  });
+
+  it("returns branch coverage percent when metric is 'branch' and branches exist", () => {
+    const cov: FunctionCoverage = {
+      filePath: "src/x.ts",
+      name: "fn",
+      span: span(1, 10),
+      lineCoverage: ratio(7, 10), // 70%
+      branchCoverage: ratio(3, 10), // 30%
+    };
+    expect(extractCoveragePercent(cov, "branch")).toBe(30);
+  });
+
+  it("returns 100 when metric is 'branch' but branchCoverage is null (no branches)", () => {
+    const cov: FunctionCoverage = {
+      filePath: "src/x.ts",
+      name: "fn",
+      span: span(1, 10),
+      lineCoverage: ratio(5, 10), // 50%
+      branchCoverage: null,
+    };
+    // No branches = nothing to test = 100% covered
+    expect(extractCoveragePercent(cov, "branch")).toBe(100);
   });
 });

@@ -87,6 +87,13 @@ export default defineConfig({
 });
 ```
 
+### Coverage Metric
+
+The `coverageMetric` option controls which coverage data is used for CRAP scoring:
+
+- **`"line"`** (default) — Uses line coverage percentages.
+- **`"branch"`** — Uses branch coverage percentages. When a function has no branches (e.g., a simple function with no `if`/`switch`/`??`), branch coverage defaults to **100%** since there are no branches to test.
+
 ## Coverage Format Support
 
 | Format | Source | Status |

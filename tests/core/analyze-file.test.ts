@@ -234,6 +234,39 @@ describe("analyzeFile", () => {
     ).rejects.toThrow("File not found");
   });
 
+  it("defaults to 100% coverage when branch metric requested but function has no branches", async () => {
+    const comp = makeComplexity("src/simple.ts", "add", 1, span(1, 5));
+    const cov: FunctionCoverage = {
+      filePath: "src/simple.ts",
+      name: "add",
+      span: span(1, 5),
+      lineCoverage: ratio(4, 10), // 40%
+      branchCoverage: null, // no branches
+    };
+
+    const deps = createDeps({
+      complexityPort: fakeComplexityPort([comp]),
+      coveragePort: fakeCoveragePort(
+        new Map([["src/simple.ts", [cov]]]),
+      ),
+      matcher: fakeMatcher([{ complexity: comp, coverage: cov }]),
+      readFile: async () => "// source",
+      readJson: async () => ({}),
+    });
+
+    const { verdicts } = await analyzeFile(
+      "src/simple.ts",
+      { coverage: "/project/coverage.json", coverageMetric: "branch" },
+      deps,
+    );
+
+    expect(verdicts).toHaveLength(1);
+    // No branches = 100% branch coverage, not 40% line coverage fallback
+    expect(verdicts[0]!.scored.coveragePercent).toBe(100);
+    // CRAP(1, 100%) = 1^2 * 0^3 + 1 = 1
+    expect(verdicts[0]!.scored.crap.value).toBe(1);
+  });
+
   it("handles multiple functions with mixed match/unmatch results", async () => {
     const compMatched = makeComplexity("src/mix.ts", "covered", 2, span(1, 8));
     const compUnmatched = makeComplexity("src/mix.ts", "uncovered", 6, span(9, 20));
