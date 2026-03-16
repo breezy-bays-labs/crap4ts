@@ -242,8 +242,10 @@ export function extractCoveragePercent(
   coverage: FunctionCoverage,
   metric: "line" | "branch",
 ): number {
-  if (metric === "branch" && coverage.branchCoverage !== null) {
-    return coverage.branchCoverage.percent;
+  if (metric === "branch") {
+    return coverage.branchCoverage !== null
+      ? coverage.branchCoverage.percent
+      : 100; // No branches = fully covered
   }
   return coverage.lineCoverage.percent;
 }
