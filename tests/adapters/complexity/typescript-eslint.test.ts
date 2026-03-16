@@ -217,6 +217,80 @@ describe("TypeScriptEslintComplexityAdapter", () => {
     });
   });
 
+  describe("SwitchCase fall-through (issue #6)", () => {
+    it("simple fall-through: empty case 'a' should not count, only case 'b' counts (CC=2)", () => {
+      const source = `
+function test(x: string): number {
+  switch (x) {
+    case 'a':
+    case 'b':
+      return 1;
+    default:
+      return 0;
+  }
+}`;
+      const results = adapter.extract(source, "test.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "test");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(2); // case 'b' + base
+    });
+
+    it("multiple fall-throughs: only the case with statements counts (CC=2)", () => {
+      const source = `
+function test(x: string): number {
+  switch (x) {
+    case 'a':
+    case 'b':
+    case 'c':
+      return 1;
+    default:
+      return 0;
+  }
+}`;
+      const results = adapter.extract(source, "test.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "test");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(2); // case 'c' + base
+    });
+
+    it("mixed fall-through and non-fall-through cases (CC=3)", () => {
+      const source = `
+function test(x: string): number {
+  switch (x) {
+    case 'a':
+    case 'b':
+      return 1;
+    case 'c':
+      return 2;
+    default:
+      return 0;
+  }
+}`;
+      const results = adapter.extract(source, "test.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "test");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(3); // case 'b' + case 'c' + base
+    });
+
+    it("no fall-through: all cases with statements still count normally", () => {
+      const source = `
+function test(x: string): number {
+  switch (x) {
+    case 'a':
+      return 1;
+    case 'b':
+      return 2;
+    default:
+      return 0;
+  }
+}`;
+      const results = adapter.extract(source, "test.ts");
+      const fn = results.find(r => r.identity.qualifiedName === "test");
+      expect(fn).toBeDefined();
+      expect(fn?.cyclomaticComplexity).toBe(3); // case 'a' + case 'b' + base
+    });
+  });
+
   describe("SourceSpan endLine conversion", () => {
     it("converts inclusive endLine to exclusive (domainEndLine = sourceEndLine + 1)", () => {
       const results = analyzeFixture("simple-functions.ts");

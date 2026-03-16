@@ -231,8 +231,8 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
 
     // Count decision points
     if (node.type === "SwitchCase") {
-      // Only count non-default cases
-      if (node.test !== null) {
+      // Only count non-default cases that have statements (skip empty fall-throughs)
+      if (node.test !== null && node.consequent.length > 0) {
         scope.complexity++;
       }
     } else if (DECISION_TYPES.has(node.type)) {
