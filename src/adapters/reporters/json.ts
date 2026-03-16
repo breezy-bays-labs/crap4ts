@@ -10,7 +10,9 @@ export class JsonReporter implements ReporterPort {
       timestamp: new Date().toISOString(),
       config: result.thresholdConfig,
       summary: result.summary,
-      files: result.files,
+      functions: result.functions,
+      unmatched: result.unmatched,
+      warnings: result.warnings,
       passed: result.passed,
     };
 

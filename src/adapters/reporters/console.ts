@@ -1,6 +1,6 @@
 import { Chalk, type ChalkInstance } from "chalk";
 import type { ReporterPort } from "../../ports/reporter-port.js";
-import type { AnalysisResult, FunctionVerdict } from "../../domain/types.js";
+import type { AnalysisResult } from "../../domain/types.js";
 import { readPackageVersion } from "./version.js";
 
 export interface ConsoleReporterOptions {
@@ -25,17 +25,17 @@ export class ConsoleReporter implements ReporterPort {
     lines.push("");
 
     // ── Table ───────────────────────────────────────────────────────
-    const allVerdicts = this.collectVerdicts(result);
+    const verdicts = result.functions;
 
-    if (allVerdicts.length > 0) {
+    if (verdicts.length > 0) {
       // Column widths
       const fileW = Math.max(
         4,
-        ...allVerdicts.map((v) => v.scored.identity.filePath.length),
+        ...verdicts.map((v) => v.scored.identity.filePath.length),
       );
       const fnW = Math.max(
         8,
-        ...allVerdicts.map((v) => v.scored.identity.qualifiedName.length),
+        ...verdicts.map((v) => v.scored.identity.qualifiedName.length),
       );
       const ccW = 4;
       const covW = 6;
@@ -52,7 +52,7 @@ export class ConsoleReporter implements ReporterPort {
       );
 
       // Data rows
-      for (const v of allVerdicts) {
+      for (const v of verdicts) {
         const { scored, exceeds } = v;
         const filePath = scored.identity.filePath.padEnd(fileW);
         const fnName = scored.identity.qualifiedName.padEnd(fnW);
@@ -83,16 +83,6 @@ export class ConsoleReporter implements ReporterPort {
     lines.push("");
 
     return lines.join("\n");
-  }
-
-  private collectVerdicts(result: AnalysisResult): FunctionVerdict[] {
-    const verdicts: FunctionVerdict[] = [];
-    for (const file of result.files) {
-      for (const fn of file.functions) {
-        verdicts.push(fn);
-      }
-    }
-    return verdicts;
   }
 
   private colorizeCoverage(formatted: string, percent: number): string {

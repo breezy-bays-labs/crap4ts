@@ -4,23 +4,18 @@ import {
   createThresholdConfig,
   resolveThreshold,
 } from "../domain/threshold.js";
-import { groupBy } from "../domain/matching.js";
 import { computeSummary } from "../domain/summary.js";
-import {
-  RiskLevel,
-} from "../domain/types.js";
 import type {
   AnalyzeOptions,
   AnalysisResult,
   FunctionVerdict,
-  FileResult,
   UnmatchedFunction,
+  Warning,
   FunctionComplexity,
   FunctionCoverage,
   MatchFunctions,
   ThresholdConfig,
   ScoredFunction,
-  CrapScore,
 } from "../domain/types.js";
 import type { ComplexityPort } from "../ports/complexity-port.js";
 import type { CoveragePort } from "../ports/coverage-port.js";
@@ -63,20 +58,23 @@ export async function analyze(
     return emptyResult(thresholdConfig);
   }
 
-  // 3. Read coverage data
-  const coverageData = await loadCoverageData(resolvedDeps, opts.coveragePath);
-
-  // 4. Extract complexity for each source file
+  // 3. Read source files (used for both complexity extraction and accurate coverage mapping)
+  const sourceContents = new Map<string, string>();
   const allComplexities: FunctionComplexity[] = [];
   for (const filePath of sourceFiles) {
     const absolutePath = resolve(opts.cwd, filePath);
     const source = await resolvedDeps.readFile(absolutePath);
+    sourceContents.set(filePath, source);
     const fileComplexities = resolvedDeps.complexityPort.extract(
       source,
       filePath,
     );
     allComplexities.push(...fileComplexities);
   }
+
+  // 4. Read coverage data (pass source content for accurate line mapping)
+  const { coverage: coverageData, warnings: coverageWarnings } =
+    await loadCoverageData(resolvedDeps, opts.coveragePath, sourceContents);
 
   // 5. Flatten all coverage data
   const allCoverages = flattenCoverages(coverageData);
@@ -129,8 +127,25 @@ export async function analyze(
     });
   }
 
-  // 10. Group by file
-  const files = buildFileResults(allVerdicts, allUnmatched);
+  // 10. Collect warnings from coverage parsing and unmatched
+  const warnings: Warning[] = [...coverageWarnings];
+  for (const u of allUnmatched) {
+    if (u.kind === "no-coverage") {
+      warnings.push({
+        code: "unmatched-no-coverage",
+        message: `No coverage data found for function "${u.complexity.identity.qualifiedName}"`,
+        file: u.complexity.identity.filePath,
+        function: u.complexity.identity.qualifiedName,
+      });
+    } else {
+      warnings.push({
+        code: "unmatched-no-ast",
+        message: `No AST match found for coverage entry "${u.coverage.name}"`,
+        file: u.coverage.filePath,
+        function: u.coverage.name,
+      });
+    }
+  }
 
   // 11. Compute overall summary
   const summary = computeSummary(allVerdicts);
@@ -138,7 +153,7 @@ export async function analyze(
   // 12. Determine pass/fail
   const passed = allVerdicts.every((v) => !v.exceeds);
 
-  return { files, summary, thresholdConfig, passed };
+  return { functions: allVerdicts, unmatched: allUnmatched, warnings, summary, thresholdConfig, passed };
 }
 
 // ── Internal Helpers ──────────────────────────────────────────────
@@ -206,23 +221,21 @@ function buildThresholdConfig(opts: ResolvedOptions): ThresholdConfig {
 async function loadCoverageData(
   deps: AnalyzeDeps,
   coveragePath: string | undefined,
-): Promise<Map<string, FunctionCoverage[]>> {
+  sources?: ReadonlyMap<string, string>,
+): Promise<{ coverage: ReadonlyMap<string, ReadonlyArray<FunctionCoverage>>; warnings: Warning[] }> {
   if (!coveragePath) {
-    return new Map();
+    return { coverage: new Map(), warnings: [] };
   }
 
   const rawData = await deps.readJson(coveragePath);
-  return deps.coveragePort.parse(rawData);
+  const result = deps.coveragePort.parse(rawData, sources);
+  return { coverage: result.coverage, warnings: [...result.warnings] };
 }
 
 export function flattenCoverages(
-  coverageData: Map<string, FunctionCoverage[]>,
+  coverageData: ReadonlyMap<string, ReadonlyArray<FunctionCoverage>>,
 ): FunctionCoverage[] {
-  const result: FunctionCoverage[] = [];
-  for (const coverages of coverageData.values()) {
-    result.push(...coverages);
-  }
-  return result;
+  return Array.from(coverageData.values()).flat();
 }
 
 export function extractCoveragePercent(
@@ -235,76 +248,11 @@ export function extractCoveragePercent(
   return coverage.lineCoverage.percent;
 }
 
-function getUnmatchedFilePath(u: UnmatchedFunction): string {
-  return u.kind === "no-coverage"
-    ? u.complexity.identity.filePath
-    : u.coverage.filePath;
-}
-
-function buildFileResults(
-  verdicts: FunctionVerdict[],
-  unmatched: UnmatchedFunction[],
-): FileResult[] {
-  const verdictsByFile = groupBy(verdicts, (v) => v.scored.identity.filePath);
-  const unmatchedByFile = groupBy(unmatched, getUnmatchedFilePath);
-
-  const allFiles = new Set([...verdictsByFile.keys(), ...unmatchedByFile.keys()]);
-
-  const results: FileResult[] = [];
-  for (const filePath of allFiles) {
-    const fileVerdicts = verdictsByFile.get(filePath) ?? [];
-    const fileUnmatched = unmatchedByFile.get(filePath) ?? [];
-    results.push(buildSingleFileResult(filePath, fileVerdicts, fileUnmatched));
-  }
-
-  return results;
-}
-
-function buildSingleFileResult(
-  filePath: string,
-  verdicts: FunctionVerdict[],
-  unmatched: UnmatchedFunction[],
-): FileResult {
-  const totalFunctions = verdicts.length;
-  const exceedingThreshold = verdicts.filter((v) => v.exceeds).length;
-
-  let maxCrap: CrapScore = { value: 0, riskLevel: RiskLevel.Low };
-  let averageCrap = 0;
-
-  if (totalFunctions > 0) {
-    const crapValues = verdicts.map((v) => v.scored.crap.value);
-    averageCrap =
-      Math.round(
-        (crapValues.reduce((sum, v) => sum + v, 0) / totalFunctions +
-          Number.EPSILON) *
-          100,
-      ) / 100;
-
-    let maxVal = 0;
-    for (const v of verdicts) {
-      if (v.scored.crap.value > maxVal) {
-        maxVal = v.scored.crap.value;
-        maxCrap = v.scored.crap;
-      }
-    }
-  }
-
-  return {
-    filePath,
-    functions: verdicts,
-    unmatched,
-    summary: {
-      totalFunctions,
-      exceedingThreshold,
-      maxCrap,
-      averageCrap,
-    },
-  };
-}
-
 function emptyResult(thresholdConfig: ThresholdConfig): AnalysisResult {
   return {
-    files: [],
+    functions: [],
+    unmatched: [],
+    warnings: [],
     summary: computeSummary([]),
     thresholdConfig,
     passed: true,

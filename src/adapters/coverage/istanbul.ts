@@ -1,4 +1,4 @@
-import type { CoveragePort } from "../../ports/coverage-port.js";
+import type { CoveragePort, CoverageParseResult } from "../../ports/coverage-port.js";
 import type {
   FunctionCoverage,
   CoverageRatio,
@@ -153,7 +153,7 @@ export class IstanbulCoverageAdapter implements CoveragePort {
     this.cwd = cwd;
   }
 
-  parse(data: unknown): Map<string, FunctionCoverage[]> {
+  parse(data: unknown): CoverageParseResult {
     if (data === null || typeof data !== "object" || Array.isArray(data)) {
       throw new Error(
         "Invalid Istanbul coverage data: expected an object keyed by file paths",
@@ -219,6 +219,6 @@ export class IstanbulCoverageAdapter implements CoveragePort {
       result.set(relativePath, functions);
     }
 
-    return result;
+    return { coverage: result, warnings: [] };
   }
 }

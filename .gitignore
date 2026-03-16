@@ -10,3 +10,4 @@ reports/
 .claude/*
 !.claude/rules/
 !.claude/rules/**
+.workflow/

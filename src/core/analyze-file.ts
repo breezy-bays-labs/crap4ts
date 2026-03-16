@@ -8,6 +8,7 @@ import type {
   FunctionComplexity,
   FunctionCoverage,
   FunctionVerdict,
+  Warning,
   ThresholdConfig,
 } from "../domain/types.js";
 import { extractCoveragePercent, flattenCoverages } from "./analyze.js";
@@ -19,6 +20,11 @@ export interface AnalyzeFileOptions {
   coverage?: string;
   threshold?: number;
   coverageMetric?: "line" | "branch";
+}
+
+export interface AnalyzeFileResult {
+  readonly verdicts: ReadonlyArray<FunctionVerdict>;
+  readonly warnings: ReadonlyArray<Warning>;
 }
 
 /**
@@ -33,7 +39,7 @@ export async function analyzeFile(
   filePath: string,
   options?: AnalyzeFileOptions,
   deps?: AnalyzeDeps,
-): Promise<FunctionVerdict[]> {
+): Promise<AnalyzeFileResult> {
   const resolvedDeps = deps ?? (await loadDefaults());
   const opts = options ?? {};
   const coverageMetric = opts.coverageMetric ?? "line";
@@ -41,10 +47,14 @@ export async function analyzeFile(
 
   const source = await resolvedDeps.readFile(filePath);
   const complexities = resolvedDeps.complexityPort.extract(source, filePath);
-  if (complexities.length === 0) return [];
+  if (complexities.length === 0) return { verdicts: [], warnings: [] };
 
-  const allCoverages = await loadFileCoverages(resolvedDeps, opts.coverage);
-  const matchResult = resolvedDeps.matcher(complexities, allCoverages);
+  // Pass source content for accurate line mapping (Tier 2)
+  const sourceContents = new Map([[filePath, source]]);
+  const { coverages, warnings: coverageWarnings } =
+    await loadFileCoverages(resolvedDeps, opts.coverage, sourceContents);
+
+  const matchResult = resolvedDeps.matcher(complexities, coverages);
 
   const verdicts: FunctionVerdict[] = matchResult.matched.map(({ complexity, coverage }) =>
     scoreMatchedFunction(complexity, coverage, coverageMetric, thresholdConfig, resolvedDeps.globMatcher),
@@ -54,7 +64,7 @@ export async function analyzeFile(
     verdicts.push(scoreUnmatchedFunction(complexity, thresholdConfig, resolvedDeps.globMatcher));
   }
 
-  return verdicts;
+  return { verdicts, warnings: coverageWarnings };
 }
 
 // ── Internal Helpers ──────────────────────────────────────────────
@@ -105,11 +115,12 @@ function scoreUnmatchedFunction(
 async function loadFileCoverages(
   deps: AnalyzeDeps,
   coveragePath?: string,
-): Promise<FunctionCoverage[]> {
-  if (!coveragePath) return [];
+  sources?: ReadonlyMap<string, string>,
+): Promise<{ coverages: FunctionCoverage[]; warnings: Warning[] }> {
+  if (!coveragePath) return { coverages: [], warnings: [] };
   const rawData = await deps.readJson(coveragePath);
-  const coverageMap = deps.coveragePort.parse(rawData);
-  return flattenCoverages(coverageMap);
+  const { coverage, warnings } = deps.coveragePort.parse(rawData, sources);
+  return { coverages: flattenCoverages(coverage), warnings: [...warnings] };
 }
 
 async function loadDefaults(): Promise<AnalyzeDeps> {

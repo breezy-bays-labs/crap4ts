@@ -7,7 +7,7 @@ import picomatch from "picomatch";
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { AnalyzeDeps } from "./analyze.js";
-import type { CoveragePort } from "../ports/coverage-port.js";
+import type { CoveragePort, CoverageParseResult } from "../ports/coverage-port.js";
 
 // ── Auto-Detecting Coverage Port ──────────────────────────────────
 
@@ -20,13 +20,13 @@ class AutoDetectCoverageAdapter implements CoveragePort {
     this.v8 = new V8CoverageAdapter(cwd);
   }
 
-  parse(data: unknown) {
+  parse(data: unknown, sources?: ReadonlyMap<string, string>): CoverageParseResult {
     const format = detectCoverageFormat(data);
     switch (format) {
       case "istanbul":
         return this.istanbul.parse(data);
       case "v8":
-        return this.v8.parse(data);
+        return this.v8.parse(data, sources);
       default:
         throw new Error(
           `Unknown coverage format. Expected Istanbul JSON or V8 format.`,

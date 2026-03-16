@@ -1,7 +1,7 @@
 export { analyze } from "./analyze.js";
 export type { AnalyzeDeps } from "./analyze.js";
 export { analyzeFile } from "./analyze-file.js";
-export type { AnalyzeFileOptions } from "./analyze-file.js";
+export type { AnalyzeFileOptions, AnalyzeFileResult } from "./analyze-file.js";
 export { defineConfig } from "./define-config.js";
 export type { Crap4tsConfig } from "./define-config.js";
 export { createDefaultDeps } from "./defaults.js";
@@ -11,7 +11,6 @@ export type {
   AnalyzeOptions,
   AnalysisResult,
   AnalysisSummary,
-  FileResult,
   FunctionVerdict,
   ScoredFunction,
   CrapScore,
@@ -23,5 +22,8 @@ export type {
   FunctionComplexity,
   FunctionCoverage,
   RiskDistribution,
+  UnmatchedFunction,
+  Warning,
+  WarningCode,
 } from "../domain/types.js";
 export { RiskLevel } from "../domain/types.js";
