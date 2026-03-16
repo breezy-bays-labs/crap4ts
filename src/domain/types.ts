@@ -82,19 +82,22 @@ export type UnmatchedFunction =
       readonly coverage: FunctionCoverage;
     };
 
-// ── File & Analysis Results ─────────────────────────────────────────
+// ── Warnings ────────────────────────────────────────────────────────
 
-export interface FileResult {
-  readonly filePath: string;
-  readonly functions: ReadonlyArray<FunctionVerdict>;
-  readonly unmatched: ReadonlyArray<UnmatchedFunction>;
-  readonly summary: {
-    readonly totalFunctions: number;
-    readonly exceedingThreshold: number;
-    readonly maxCrap: CrapScore;
-    readonly averageCrap: number;
-  };
+export type WarningCode =
+  | "unmatched-no-coverage"
+  | "unmatched-no-ast"
+  | "approximate-span"
+  | "missing-coverage-file";
+
+export interface Warning {
+  readonly code: WarningCode;
+  readonly message: string;
+  readonly file?: string;
+  readonly function?: string;
 }
+
+// ── Analysis Results ────────────────────────────────────────────────
 
 export interface RiskDistribution {
   readonly [RiskLevel.Low]: number;
@@ -133,7 +136,9 @@ export type ThresholdPreset = "strict" | "default" | "lenient";
 // ── Top-Level Analysis Result ───────────────────────────────────────
 
 export interface AnalysisResult {
-  readonly files: ReadonlyArray<FileResult>;
+  readonly functions: ReadonlyArray<FunctionVerdict>;
+  readonly unmatched: ReadonlyArray<UnmatchedFunction>;
+  readonly warnings: ReadonlyArray<Warning>;
   readonly summary: AnalysisSummary;
   readonly thresholdConfig: ThresholdConfig;
   readonly passed: boolean;

@@ -1,8 +1,9 @@
-import type { CoveragePort } from "../../ports/coverage-port.js";
+import type { CoveragePort, CoverageParseResult } from "../../ports/coverage-port.js";
 import type {
   FunctionCoverage,
   CoverageRatio,
   SourceSpan,
+  Warning,
 } from "../../domain/types.js";
 
 // ── V8 Coverage JSON types ────────────────────────────────────────
@@ -27,8 +28,52 @@ interface V8ScriptCoverage {
 
 // ── Constants ─────────────────────────────────────────────────────
 
-/** Approximate characters per line for byte-offset → line-number conversion. */
+/** Approximate characters per line for Tier 3 fallback. */
 const APPROX_CHARS_PER_LINE = 40;
+
+// ── Line Offset Table (Tier 2) ───────────────────────────────────
+
+/**
+ * Build a table of cumulative byte offsets for each line boundary.
+ * table[i] = byte offset of the start of line (i+1).
+ * table[0] = 0 (line 1 starts at byte 0).
+ */
+export function buildLineOffsetTable(source: string): number[] {
+  const table: number[] = [0];
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === "\n") {
+      table.push(i + 1);
+    }
+  }
+  return table;
+}
+
+/**
+ * Convert a byte offset to a 1-based line number using binary search
+ * on a line offset table.
+ */
+export function byteOffsetToLineFromTable(
+  offset: number,
+  table: readonly number[],
+): number {
+  let lo = 0;
+  let hi = table.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >>> 1;
+    if (table[mid]! <= offset) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return lo + 1; // 1-based
+}
+
+// ── Tier 3 Fallback ──────────────────────────────────────────────
+
+function byteOffsetToLineApprox(offset: number): number {
+  return Math.max(1, Math.ceil(offset / APPROX_CHARS_PER_LINE));
+}
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -97,23 +142,26 @@ function computeByteCoverage(ranges: readonly V8Range[]): CoverageRatio {
   return { covered: coveredBytes, total: totalBytes, percent };
 }
 
-function byteOffsetToLine(offset: number): number {
-  return Math.max(1, Math.ceil(offset / APPROX_CHARS_PER_LINE));
-}
+function computeSpan(
+  outerRange: V8Range,
+  table: readonly number[] | null,
+): SourceSpan {
+  if (table) {
+    const startLine = byteOffsetToLineFromTable(outerRange.startOffset, table);
+    const endLine = Math.max(
+      startLine + 1,
+      byteOffsetToLineFromTable(outerRange.endOffset, table) + 1,
+    );
+    return { startLine, startColumn: 0, endLine, endColumn: 0 };
+  }
 
-function computeApproximateSpan(outerRange: V8Range): SourceSpan {
-  const startLine = byteOffsetToLine(outerRange.startOffset);
+  // Tier 3: approximation
+  const startLine = byteOffsetToLineApprox(outerRange.startOffset);
   const endLine = Math.max(
     startLine + 1,
     Math.ceil(outerRange.endOffset / APPROX_CHARS_PER_LINE) + 1,
   );
-
-  return {
-    startLine,
-    startColumn: 0,
-    endLine, // exclusive, per domain convention
-    endColumn: 0,
-  };
+  return { startLine, startColumn: 0, endLine, endColumn: 0 };
 }
 
 // ── Adapter ───────────────────────────────────────────────────────
@@ -125,7 +173,10 @@ export class V8CoverageAdapter implements CoveragePort {
     this.cwd = cwd;
   }
 
-  parse(data: unknown): Map<string, FunctionCoverage[]> {
+  parse(
+    data: unknown,
+    sources?: ReadonlyMap<string, string>,
+  ): CoverageParseResult {
     if (data === null || typeof data !== "object" || Array.isArray(data)) {
       throw new Error(
         "Invalid V8 coverage data: expected an object with a 'result' array",
@@ -153,12 +204,33 @@ export class V8CoverageAdapter implements CoveragePort {
       : findLongestCommonPrefix(absolutePaths);
 
     const result = new Map<string, FunctionCoverage[]>();
+    const warnings: Warning[] = [];
+    const warnedFiles = new Set<string>();
 
     for (let i = 0; i < scripts.length; i++) {
       const script = scripts[i]!;
       const absolutePath = absolutePaths[i]!;
       const relativePath = normalizePath(absolutePath, prefix);
       const functions: FunctionCoverage[] = [];
+
+      // Try to get source content for accurate line mapping (Tier 2)
+      const sourceContent = sources?.get(relativePath) ?? null;
+      const lineTable = sourceContent
+        ? buildLineOffsetTable(sourceContent)
+        : null;
+
+      // Emit warning if falling back to approximation
+      if (!lineTable && !warnedFiles.has(relativePath)) {
+        const hasFunctions = script.functions.some((fn) => fn.functionName && fn.ranges.length > 0);
+        if (hasFunctions) {
+          warnings.push({
+            code: "approximate-span",
+            message: `Source content unavailable for "${relativePath}" — using approximate byte-to-line conversion`,
+            file: relativePath,
+          });
+          warnedFiles.add(relativePath);
+        }
+      }
 
       for (const fn of script.functions) {
         // Skip anonymous functions (empty name)
@@ -168,7 +240,7 @@ export class V8CoverageAdapter implements CoveragePort {
         if (fn.ranges.length === 0) continue;
 
         const outerRange = fn.ranges[0]!;
-        const span = computeApproximateSpan(outerRange);
+        const span = computeSpan(outerRange, lineTable);
         const lineCoverage = computeByteCoverage(fn.ranges);
 
         functions.push({
@@ -183,6 +255,6 @@ export class V8CoverageAdapter implements CoveragePort {
       result.set(relativePath, functions);
     }
 
-    return result;
+    return { coverage: result, warnings };
   }
 }

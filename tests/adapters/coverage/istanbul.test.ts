@@ -13,7 +13,7 @@ describe("IstanbulCoverageAdapter", () => {
 
   describe("parse()", () => {
     it("returns a Map keyed by project-relative forward-slash paths", () => {
-      const result = adapter.parse(loadFixture());
+      const result = adapter.parse(loadFixture()).coverage;
       expect(result).toBeInstanceOf(Map);
       expect([...result.keys()]).toEqual(
         expect.arrayContaining(["src/math.ts", "src/utils/format.ts"]),
@@ -21,7 +21,7 @@ describe("IstanbulCoverageAdapter", () => {
     });
 
     it("groups functions by file", () => {
-      const result = adapter.parse(loadFixture());
+      const result = adapter.parse(loadFixture()).coverage;
       expect(result.get("src/math.ts")).toHaveLength(3);
       expect(result.get("src/utils/format.ts")).toHaveLength(1);
     });
@@ -29,13 +29,13 @@ describe("IstanbulCoverageAdapter", () => {
 
   describe("fnMap → FunctionCoverage[]", () => {
     it("extracts function names from fnMap", () => {
-      const result = adapter.parse(loadFixture());
+      const result = adapter.parse(loadFixture()).coverage;
       const names = result.get("src/math.ts")!.map((f) => f.name);
       expect(names).toEqual(["add", "divide", "neverCalled"]);
     });
 
     it("converts inclusive endLine to exclusive (domainEndLine = sourceEndLine + 1)", () => {
-      const result = adapter.parse(loadFixture());
+      const result = adapter.parse(loadFixture()).coverage;
       const add = result.get("src/math.ts")!.find((f) => f.name === "add")!;
       // source loc.end.line = 3 → domain endLine = 4
       expect(add.span.endLine).toBe(4);
@@ -43,7 +43,7 @@ describe("IstanbulCoverageAdapter", () => {
     });
 
     it("sets filePath to project-relative forward-slash path", () => {
-      const result = adapter.parse(loadFixture());
+      const result = adapter.parse(loadFixture()).coverage;
       const fns = result.get("src/math.ts")!;
       for (const fn of fns) {
         expect(fn.filePath).toBe("src/math.ts");
@@ -53,7 +53,7 @@ describe("IstanbulCoverageAdapter", () => {
 
   describe("line coverage (statementMap + s)", () => {
     it("computes 100% line coverage for fully-covered function", () => {
-      const result = adapter.parse(loadFixture());
+      const result = adapter.parse(loadFixture()).coverage;
       const add = result.get("src/math.ts")!.find((f) => f.name === "add")!;
       // statement 0 (line 2) is within add (lines 1–3), s["0"] = 10
       expect(add.lineCoverage).toEqual({
@@ -64,7 +64,7 @@ describe("IstanbulCoverageAdapter", () => {
     });
 
     it("computes correct line coverage for partially-covered function", () => {
-      const result = adapter.parse(loadFixture());
+      const result = adapter.parse(loadFixture()).coverage;
       const divide = result
         .get("src/math.ts")!
         .find((f) => f.name === "divide")!;
@@ -78,7 +78,7 @@ describe("IstanbulCoverageAdapter", () => {
     });
 
     it("computes 0% line coverage for uncovered function", () => {
-      const result = adapter.parse(loadFixture());
+      const result = adapter.parse(loadFixture()).coverage;
       const neverCalled = result
         .get("src/math.ts")!
         .find((f) => f.name === "neverCalled")!;
@@ -93,7 +93,7 @@ describe("IstanbulCoverageAdapter", () => {
 
   describe("branch coverage (branchMap + b)", () => {
     it("computes branch coverage for function with if-branch", () => {
-      const result = adapter.parse(loadFixture());
+      const result = adapter.parse(loadFixture()).coverage;
       const divide = result
         .get("src/math.ts")!
         .find((f) => f.name === "divide")!;
@@ -107,13 +107,13 @@ describe("IstanbulCoverageAdapter", () => {
     });
 
     it("returns null branchCoverage when function has no branches", () => {
-      const result = adapter.parse(loadFixture());
+      const result = adapter.parse(loadFixture()).coverage;
       const add = result.get("src/math.ts")!.find((f) => f.name === "add")!;
       expect(add.branchCoverage).toBeNull();
     });
 
     it("returns null branchCoverage for file with no branches at all", () => {
-      const result = adapter.parse(loadFixture());
+      const result = adapter.parse(loadFixture()).coverage;
       const formatName = result
         .get("src/utils/format.ts")!
         .find((f) => f.name === "formatName")!;
@@ -123,7 +123,7 @@ describe("IstanbulCoverageAdapter", () => {
 
   describe("path normalization", () => {
     it("strips cwd prefix and produces forward-slash paths", () => {
-      const result = adapter.parse(loadFixture());
+      const result = adapter.parse(loadFixture()).coverage;
       const keys = [...result.keys()];
       for (const key of keys) {
         expect(key).not.toMatch(/^\//);
@@ -133,7 +133,7 @@ describe("IstanbulCoverageAdapter", () => {
 
     it("auto-detects common prefix when no cwd provided", () => {
       const autoAdapter = new IstanbulCoverageAdapter();
-      const result = autoAdapter.parse(loadFixture());
+      const result = autoAdapter.parse(loadFixture()).coverage;
       // Common prefix of /projects/my-app/src/math.ts and /projects/my-app/src/utils/format.ts
       // is /projects/my-app/src/ → relative paths are math.ts and utils/format.ts
       expect([...result.keys()]).toEqual(
@@ -150,7 +150,7 @@ describe("IstanbulCoverageAdapter", () => {
     });
 
     it("returns empty Map for empty object", () => {
-      const result = adapter.parse({});
+      const result = adapter.parse({}).coverage;
       expect(result.size).toBe(0);
     });
 
@@ -178,7 +178,7 @@ describe("IstanbulCoverageAdapter", () => {
           b: {},
         },
       };
-      const result = adapter.parse(data);
+      const result = adapter.parse(data).coverage;
       const noop = result.get("src/empty.ts")!.find((f) => f.name === "noop")!;
       expect(noop.lineCoverage).toEqual({
         covered: 0,
@@ -186,6 +186,13 @@ describe("IstanbulCoverageAdapter", () => {
         percent: 100,
       });
       expect(noop.branchCoverage).toBeNull();
+    });
+  });
+
+  describe("warnings", () => {
+    it("always returns empty warnings array", () => {
+      const { warnings } = adapter.parse(loadFixture());
+      expect(warnings).toEqual([]);
     });
   });
 });

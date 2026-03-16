@@ -21,7 +21,6 @@ import { ConsoleReporter } from "../adapters/reporters/console.js";
 import { JsonReporter } from "../adapters/reporters/json.js";
 import { MarkdownReporter } from "../adapters/reporters/markdown.js";
 import type { ReporterPort } from "../ports/reporter-port.js";
-import { RiskLevel } from "../domain/types.js";
 import type { AnalysisResult, FunctionVerdict } from "../domain/types.js";
 
 // ── Exit Codes ─────────────────────────────────────────────────────
@@ -247,6 +246,15 @@ program.action(async (opts: Record<string, unknown>) => {
       console.log(output);
     }
 
+    // 9b. Show warnings on stderr when --verbose
+    if (verbose && result.warnings.length > 0) {
+      console.error("");
+      console.error(`Warnings (${result.warnings.length}):`);
+      for (const w of result.warnings) {
+        console.error(`  [${w.code}] ${w.message}`);
+      }
+    }
+
     // 10. Exit with appropriate code
     process.exit(result.passed ? EXIT_OK : EXIT_THRESHOLD);
   } catch (err) {
@@ -325,35 +333,24 @@ function applyFilters(
   sortField?: string,
   topN?: number,
 ): AnalysisResult {
-  // Collect all verdicts
-  let allVerdicts: FunctionVerdict[] = [];
-  for (const file of result.files) {
-    for (const fn of file.functions) {
-      allVerdicts.push(fn);
-    }
-  }
+  const hasSort = Boolean(sortField);
+  const hasTopN = topN !== undefined && topN > 0;
 
-  // Sort
-  if (sortField) {
-    allVerdicts = sortVerdicts(allVerdicts, sortField);
-  }
-
-  // Top N
-  if (topN !== undefined && topN > 0) {
-    // Default to sorting by CRAP descending if no explicit sort
-    if (!sortField) {
-      allVerdicts = sortVerdicts(allVerdicts, "crap");
-    }
-    allVerdicts = allVerdicts.slice(0, topN);
-  }
-
-  if (!sortField && (topN === undefined || topN <= 0)) {
-    // No filtering needed — return original result
+  if (!hasSort && !hasTopN) {
     return result;
   }
 
-  // Rebuild the result with filtered verdicts grouped by file
-  return rebuildResult(result, allVerdicts);
+  // Default to sorting by CRAP descending when using --top without --sort
+  const effectiveSort = sortField ?? (hasTopN ? "crap" : undefined);
+  let verdicts = effectiveSort
+    ? sortVerdicts([...result.functions], effectiveSort)
+    : [...result.functions];
+
+  if (hasTopN) {
+    verdicts = verdicts.slice(0, topN);
+  }
+
+  return { ...result, functions: verdicts };
 }
 
 function sortVerdicts(
@@ -388,51 +385,6 @@ function sortVerdicts(
   }
 
   return sorted;
-}
-
-function rebuildResult(
-  original: AnalysisResult,
-  filteredVerdicts: FunctionVerdict[],
-): AnalysisResult {
-  // Group filtered verdicts by file
-  const byFile = new Map<string, FunctionVerdict[]>();
-  for (const v of filteredVerdicts) {
-    const file = v.scored.identity.filePath;
-    let group = byFile.get(file);
-    if (!group) {
-      group = [];
-      byFile.set(file, group);
-    }
-    group.push(v);
-  }
-
-  // Rebuild file results preserving only the filtered verdicts
-  const files = [...byFile.entries()].map(([filePath, verdicts]) => {
-    const originalFile = original.files.find(
-      (f) => f.filePath === filePath,
-    );
-    return {
-      filePath,
-      functions: verdicts,
-      unmatched: originalFile?.unmatched ?? [],
-      summary: originalFile?.summary ?? {
-        totalFunctions: verdicts.length,
-        exceedingThreshold: verdicts.filter((v) => v.exceeds).length,
-        maxCrap: verdicts[0]?.scored.crap ?? {
-          value: 0,
-          riskLevel: RiskLevel.Low,
-        },
-        averageCrap: 0,
-      },
-    };
-  });
-
-  return {
-    files,
-    summary: original.summary,
-    thresholdConfig: original.thresholdConfig,
-    passed: original.passed,
-  };
 }
 
 // ── Summary Formatting ─────────────────────────────────────────────

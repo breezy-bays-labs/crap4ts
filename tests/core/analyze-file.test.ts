@@ -68,7 +68,7 @@ function fakeCoveragePort(
 ): CoveragePort {
   return {
     parse() {
-      return coverageMap;
+      return { coverage: coverageMap, warnings: [] };
     },
   };
 }
@@ -119,7 +119,7 @@ describe("analyzeFile", () => {
       readJson: async () => ({ "src/math.ts": {} }),
     });
 
-    const verdicts = await analyzeFile(
+    const { verdicts } = await analyzeFile(
       "src/math.ts",
       { coverage: "/project/coverage.json" },
       deps,
@@ -148,7 +148,7 @@ describe("analyzeFile", () => {
       readFile: async () => "// source",
     });
 
-    const verdicts = await analyzeFile("src/utils.ts", undefined, deps);
+    const { verdicts } = await analyzeFile("src/utils.ts", undefined, deps);
 
     expect(verdicts).toHaveLength(2);
 
@@ -185,7 +185,7 @@ describe("analyzeFile", () => {
 
     // CRAP(4, 50%) = 16 * 0.125 + 4 = 6
     // With threshold 5 => exceeds
-    const verdicts = await analyzeFile(
+    const { verdicts } = await analyzeFile(
       "src/core.ts",
       { coverage: "/project/coverage.json", threshold: 5 },
       deps,
@@ -197,7 +197,7 @@ describe("analyzeFile", () => {
     expect(verdicts[0]!.exceeds).toBe(true);
 
     // With threshold 10 => does not exceed
-    const lenientVerdicts = await analyzeFile(
+    const { verdicts: lenientVerdicts } = await analyzeFile(
       "src/core.ts",
       { coverage: "/project/coverage.json", threshold: 10 },
       deps,
@@ -213,7 +213,7 @@ describe("analyzeFile", () => {
       readFile: async () => "const x = 42;",
     });
 
-    const verdicts = await analyzeFile("src/constants.ts", undefined, deps);
+    const { verdicts } = await analyzeFile("src/constants.ts", undefined, deps);
     expect(verdicts).toEqual([]);
   });
 
@@ -252,7 +252,7 @@ describe("analyzeFile", () => {
       readJson: async () => ({}),
     });
 
-    const verdicts = await analyzeFile(
+    const { verdicts } = await analyzeFile(
       "src/mix.ts",
       { coverage: "/project/coverage.json" },
       deps,

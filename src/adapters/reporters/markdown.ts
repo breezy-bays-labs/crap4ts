@@ -22,14 +22,12 @@ export class MarkdownReporter implements ReporterPort {
     lines.push("");
 
     // ── Collect and sort all verdicts ──────────────────────────────────
-    const allVerdicts = this.collectVerdicts(result);
-
-    if (allVerdicts.length === 0) {
+    if (result.functions.length === 0) {
       return lines.join("\n");
     }
 
     // Sort by CRAP score descending
-    const sorted = [...allVerdicts].sort(
+    const sorted = [...result.functions].sort(
       (a, b) => b.scored.crap.value - a.scored.crap.value,
     );
 
@@ -58,16 +56,6 @@ export class MarkdownReporter implements ReporterPort {
     }
 
     return lines.join("\n");
-  }
-
-  private collectVerdicts(result: AnalysisResult): FunctionVerdict[] {
-    const verdicts: FunctionVerdict[] = [];
-    for (const file of result.files) {
-      for (const fn of file.functions) {
-        verdicts.push(fn);
-      }
-    }
-    return verdicts;
   }
 
   private appendTable(lines: string[], verdicts: FunctionVerdict[]): void {

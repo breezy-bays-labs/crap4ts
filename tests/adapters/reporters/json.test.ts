@@ -3,7 +3,6 @@ import { JsonReporter } from "../../../src/adapters/reporters/json.js";
 import { RiskLevel } from "../../../src/domain/types.js";
 import type {
   AnalysisResult,
-  FileResult,
   FunctionVerdict,
   FunctionIdentity,
   CrapScore,
@@ -77,13 +76,15 @@ function makeSummary(overrides: Partial<AnalysisSummary> = {}): AnalysisSummary 
 }
 
 function makeResult(
-  files: FileResult[],
+  functions: FunctionVerdict[],
   summary: AnalysisSummary,
   passed: boolean,
   threshold = 12,
 ): AnalysisResult {
   return {
-    files,
+    functions,
+    unmatched: [],
+    warnings: [],
     summary,
     thresholdConfig: { defaultThreshold: threshold, overrides: [] } satisfies ThresholdConfig,
     passed,
@@ -161,7 +162,9 @@ describe("JsonReporter", () => {
 
     it("includes config with overrides when present", () => {
       const analysisResult: AnalysisResult = {
-        files: [],
+        functions: [],
+        unmatched: [],
+        warnings: [],
         summary: makeSummary(),
         thresholdConfig: {
           defaultThreshold: 12,
@@ -197,46 +200,21 @@ describe("JsonReporter", () => {
       expect(parsed.summary).toEqual(summary);
     });
 
-    it("includes files array from AnalysisResult.files", () => {
+    it("includes functions array from AnalysisResult.functions", () => {
       const v1 = makeVerdict("src/pricing.ts", "calculateTotal", 12, 45.0, 97.3, 12);
       const v2 = makeVerdict("src/utils.ts", "add", 1, 100.0, 1.0, 12);
 
-      const file1: FileResult = {
-        filePath: "src/pricing.ts",
-        functions: [v1],
-        unmatched: [],
-        summary: {
-          totalFunctions: 1,
-          exceedingThreshold: 1,
-          maxCrap: makeScore(97.3),
-          averageCrap: 97.3,
-        },
-      };
-      const file2: FileResult = {
-        filePath: "src/utils.ts",
-        functions: [v2],
-        unmatched: [],
-        summary: {
-          totalFunctions: 1,
-          exceedingThreshold: 0,
-          maxCrap: makeScore(1.0),
-          averageCrap: 1.0,
-        },
-      };
-
       const result = makeResult(
-        [file1, file2],
+        [v1, v2],
         makeSummary({ totalFunctions: 2, totalFiles: 2, maxCrap: makeScore(97.3) }),
         false,
       );
       const output = reporter.format(result);
       const parsed = JSON.parse(output);
 
-      expect(parsed.files).toHaveLength(2);
-      expect(parsed.files[0].filePath).toBe("src/pricing.ts");
-      expect(parsed.files[1].filePath).toBe("src/utils.ts");
-      expect(parsed.files[0].functions).toHaveLength(1);
-      expect(parsed.files[0].functions[0].scored.identity.qualifiedName).toBe("calculateTotal");
+      expect(parsed.functions).toHaveLength(2);
+      expect(parsed.functions[0].scored.identity.qualifiedName).toBe("calculateTotal");
+      expect(parsed.functions[1].scored.identity.qualifiedName).toBe("add");
     });
 
     it("includes passed boolean from AnalysisResult.passed", () => {
@@ -252,45 +230,26 @@ describe("JsonReporter", () => {
 
     it("preserves all AnalysisResult data through serialization", () => {
       const v1 = makeVerdict("src/a.ts", "fnA", 5, 80.0, 6.25, 12);
-      const file: FileResult = {
-        filePath: "src/a.ts",
-        functions: [v1],
-        unmatched: [
-          {
-            kind: "no-coverage",
-            complexity: {
-              identity: makeIdentity("src/a.ts", "uncoveredFn"),
-              cyclomaticComplexity: 3,
-            },
-            worstCaseCrap: makeScore(12),
-          },
-        ],
-        summary: {
-          totalFunctions: 2,
-          exceedingThreshold: 0,
-          maxCrap: makeScore(12),
-          averageCrap: 9.125,
-        },
-      };
 
       const summary = makeSummary({
-        totalFunctions: 2,
+        totalFunctions: 1,
         totalFiles: 1,
         exceedingThreshold: 0,
-        averageCrap: 9.125,
-        medianCrap: 9.125,
-        maxCrap: makeScore(12),
-        worstFunction: makeIdentity("src/a.ts", "uncoveredFn"),
-        distribution: makeDistribution(0, 1, 1, 0),
+        averageCrap: 6.25,
+        medianCrap: 6.25,
+        maxCrap: makeScore(6.25),
+        worstFunction: makeIdentity("src/a.ts", "fnA"),
+        distribution: makeDistribution(0, 1, 0, 0),
         crapLoad: 0,
       });
 
-      const result = makeResult([file], summary, true);
+      const result = makeResult([v1], summary, true);
       const output = reporter.format(result);
       const parsed = JSON.parse(output);
 
-      // Verify files, summary, passed are all preserved exactly
-      expect(parsed.files).toEqual(result.files);
+      // Verify functions, warnings, summary, passed are all preserved exactly
+      expect(parsed.functions).toEqual(result.functions);
+      expect(parsed.warnings).toEqual(result.warnings);
       expect(parsed.summary).toEqual(result.summary);
       expect(parsed.passed).toEqual(result.passed);
       expect(parsed.config).toEqual(result.thresholdConfig);
@@ -301,7 +260,8 @@ describe("JsonReporter", () => {
       const output = reporter.format(result);
       const parsed = JSON.parse(output);
 
-      expect(parsed.files).toEqual([]);
+      expect(parsed.functions).toEqual([]);
+      expect(parsed.warnings).toEqual([]);
       expect(parsed.summary.totalFunctions).toBe(0);
       expect(parsed.passed).toBe(true);
     });
@@ -317,7 +277,9 @@ describe("JsonReporter", () => {
       expect(keys).toContain("timestamp");
       expect(keys).toContain("config");
       expect(keys).toContain("summary");
-      expect(keys).toContain("files");
+      expect(keys).toContain("functions");
+      expect(keys).toContain("unmatched");
+      expect(keys).toContain("warnings");
       expect(keys).toContain("passed");
     });
 

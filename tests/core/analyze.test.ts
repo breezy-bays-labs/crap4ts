@@ -68,7 +68,7 @@ function fakeCoveragePort(
 ): CoveragePort {
   return {
     parse() {
-      return coverageMap;
+      return { coverage: coverageMap, warnings: [] };
     },
   };
 }
@@ -109,7 +109,9 @@ describe("analyze", () => {
     const deps = createDeps();
     const result = await analyze({ cwd: "/project" }, deps);
 
-    expect(result.files).toEqual([]);
+    expect(result.functions).toEqual([]);
+    expect(result.unmatched).toEqual([]);
+    expect(result.warnings).toEqual([]);
     expect(result.summary.totalFunctions).toBe(0);
     expect(result.passed).toBe(true);
   });
@@ -133,11 +135,10 @@ describe("analyze", () => {
 
     const result = await analyze({ cwd: "/project" }, deps);
 
-    expect(result.files).toHaveLength(1);
-    expect(result.files[0]!.filePath).toBe("src/math.ts");
-    expect(result.files[0]!.functions).toHaveLength(1);
+    expect(result.functions).toHaveLength(1);
 
-    const verdict = result.files[0]!.functions[0]!;
+    const verdict = result.functions[0]!;
+    expect(verdict.scored.identity.filePath).toBe("src/math.ts");
     expect(verdict.scored.cyclomaticComplexity).toBe(3);
     expect(verdict.scored.coveragePercent).toBe(80);
     // CRAP(3, 80%) = 3^2 * 0.2^3 + 3 = 9 * 0.008 + 3 = 3.07
@@ -167,8 +168,8 @@ describe("analyze", () => {
     const result = await analyze({ cwd: "/project" }, deps);
 
     // CRAP(10, 0%) = 10^2 * 1^3 + 10 = 110
-    expect(result.files[0]!.functions[0]!.threshold).toBe(12);
-    expect(result.files[0]!.functions[0]!.exceeds).toBe(true);
+    expect(result.functions[0]!.threshold).toBe(12);
+    expect(result.functions[0]!.exceeds).toBe(true);
     expect(result.passed).toBe(false);
   });
 
@@ -193,8 +194,8 @@ describe("analyze", () => {
     const result = await analyze({ cwd: "/project", threshold: 5 }, deps);
 
     expect(result.thresholdConfig.defaultThreshold).toBe(5);
-    expect(result.files[0]!.functions[0]!.threshold).toBe(5);
-    expect(result.files[0]!.functions[0]!.exceeds).toBe(true);
+    expect(result.functions[0]!.threshold).toBe(5);
+    expect(result.functions[0]!.exceeds).toBe(true);
   });
 
   it("passed=true when no functions exceed threshold", async () => {
@@ -286,8 +287,8 @@ describe("analyze", () => {
 
     expect(result.thresholdConfig.overrides).toHaveLength(1);
     expect(result.thresholdConfig.overrides[0]!.glob).toBe("src/legacy/**");
-    expect(result.files[0]!.functions[0]!.threshold).toBe(50);
-    expect(result.files[0]!.functions[0]!.exceeds).toBe(false);
+    expect(result.functions[0]!.threshold).toBe(50);
+    expect(result.functions[0]!.exceeds).toBe(false);
     expect(result.passed).toBe(true);
   });
 
@@ -307,13 +308,14 @@ describe("analyze", () => {
 
     const result = await analyze({ cwd: "/project" }, deps);
 
-    expect(result.files).toHaveLength(1);
-    expect(result.files[0]!.unmatched).toHaveLength(1);
-    expect(result.files[0]!.unmatched[0]!.kind).toBe("no-coverage");
-    if (result.files[0]!.unmatched[0]!.kind === "no-coverage") {
+    expect(result.unmatched).toHaveLength(1);
+    expect(result.unmatched[0]!.kind).toBe("no-coverage");
+    if (result.unmatched[0]!.kind === "no-coverage") {
       // CRAP(5, 0%) = 25 * 1 + 5 = 30
-      expect(result.files[0]!.unmatched[0]!.worstCaseCrap.value).toBe(30);
+      expect(result.unmatched[0]!.worstCaseCrap.value).toBe(30);
     }
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]!.code).toBe("unmatched-no-coverage");
   });
 
   it("unmatched coverage entries get no-ast kind", async () => {
@@ -332,17 +334,16 @@ describe("analyze", () => {
 
     const result = await analyze({ cwd: "/project" }, deps);
 
-    // The file should still appear due to unmatched coverage
-    const fileResult = result.files.find((f) => f.filePath === "src/orphan.ts");
-    expect(fileResult).toBeDefined();
-    expect(fileResult!.unmatched).toHaveLength(1);
-    expect(fileResult!.unmatched[0]!.kind).toBe("no-ast");
-    if (fileResult!.unmatched[0]!.kind === "no-ast") {
-      expect(fileResult!.unmatched[0]!.coverage.name).toBe("mystery");
+    expect(result.unmatched).toHaveLength(1);
+    expect(result.unmatched[0]!.kind).toBe("no-ast");
+    if (result.unmatched[0]!.kind === "no-ast") {
+      expect(result.unmatched[0]!.coverage.name).toBe("mystery");
     }
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]!.code).toBe("unmatched-no-ast");
   });
 
-  it("groups function results by file path", async () => {
+  it("returns flat functions from multiple files", async () => {
     const compA1 = makeComplexity("src/a.ts", "fn1", 2, span(1, 5));
     const compA2 = makeComplexity("src/a.ts", "fn2", 3, span(6, 12));
     const compB1 = makeComplexity("src/b.ts", "fn3", 1, span(1, 8));
@@ -376,18 +377,16 @@ describe("analyze", () => {
 
     const result = await analyze({ cwd: "/project" }, deps);
 
-    expect(result.files).toHaveLength(2);
+    expect(result.functions).toHaveLength(3);
 
-    const fileA = result.files.find((f) => f.filePath === "src/a.ts");
-    const fileB = result.files.find((f) => f.filePath === "src/b.ts");
+    const fileAPaths = result.functions.filter((f) => f.scored.identity.filePath === "src/a.ts");
+    const fileBPaths = result.functions.filter((f) => f.scored.identity.filePath === "src/b.ts");
 
-    expect(fileA).toBeDefined();
-    expect(fileA!.functions).toHaveLength(2);
-    expect(fileB).toBeDefined();
-    expect(fileB!.functions).toHaveLength(1);
+    expect(fileAPaths).toHaveLength(2);
+    expect(fileBPaths).toHaveLength(1);
   });
 
-  it("computes per-file summary stats", async () => {
+  it("computes overall summary stats", async () => {
     const comp1 = makeComplexity("src/file.ts", "low", 1, span(1, 5));
     const comp2 = makeComplexity("src/file.ts", "high", 15, span(6, 20));
     const cov1 = makeCoverage("src/file.ts", "low", 100, span(1, 5));
@@ -411,11 +410,10 @@ describe("analyze", () => {
 
     const result = await analyze({ cwd: "/project" }, deps);
 
-    const file = result.files[0]!;
-    expect(file.summary.totalFunctions).toBe(2);
+    expect(result.summary.totalFunctions).toBe(2);
     // CRAP(15, 0%) = 225 + 15 = 240 => exceeds 12
-    expect(file.summary.exceedingThreshold).toBe(1);
-    expect(file.summary.maxCrap.value).toBe(240);
+    expect(result.summary.exceedingThreshold).toBe(1);
+    expect(result.summary.maxCrap.value).toBe(240);
   });
 
   it("uses line coverage by default, branch when specified", async () => {
@@ -439,14 +437,14 @@ describe("analyze", () => {
 
     // Default (line): CRAP(2, 90%) = 4 * 0.001 + 2 = 2.004 => 2
     const lineResult = await analyze({ cwd: "/project" }, deps);
-    expect(lineResult.files[0]!.functions[0]!.scored.coveragePercent).toBe(90);
+    expect(lineResult.functions[0]!.scored.coveragePercent).toBe(90);
 
     // Branch: CRAP(2, 50%) = 4 * 0.125 + 2 = 2.5
     const branchResult = await analyze(
       { cwd: "/project", coverageMetric: "branch" },
       deps,
     );
-    expect(branchResult.files[0]!.functions[0]!.scored.coveragePercent).toBe(50);
+    expect(branchResult.functions[0]!.scored.coveragePercent).toBe(50);
   });
 
   it("falls back to line coverage when branch is requested but null", async () => {
@@ -473,7 +471,7 @@ describe("analyze", () => {
       deps,
     );
     // Falls back to line coverage since branchCoverage is null
-    expect(result.files[0]!.functions[0]!.scored.coveragePercent).toBe(80);
+    expect(result.functions[0]!.scored.coveragePercent).toBe(80);
   });
 
   it("changedSince option filters to only changed files", async () => {
@@ -515,8 +513,8 @@ describe("analyze", () => {
       },
     );
 
-    expect(result.files).toHaveLength(1);
-    expect(result.files[0]!.filePath).toBe("src/changed.ts");
+    expect(result.functions).toHaveLength(1);
+    expect(result.functions[0]!.scored.identity.filePath).toBe("src/changed.ts");
   });
 
   it("returns thresholdConfig in result", async () => {
@@ -575,8 +573,9 @@ describe("analyze", () => {
 
     const result = await analyze({ cwd: "/project" }, deps);
 
-    // 2 matched functions + 1 file with unmatched
-    expect(result.files.length).toBeGreaterThanOrEqual(2);
+    // 2 matched functions + 1 unmatched
+    expect(result.functions).toHaveLength(2);
+    expect(result.unmatched).toHaveLength(1);
     expect(result.summary.totalFunctions).toBe(2); // only matched get verdicts
     expect(result.passed).toBe(false); // CRAP(20, 10%) is huge
   });
@@ -586,7 +585,7 @@ describe("analyze", () => {
     const result = await analyze(undefined, deps);
 
     // Should not throw and produce an empty result
-    expect(result.files).toEqual([]);
+    expect(result.functions).toEqual([]);
     expect(result.passed).toBe(true);
   });
 
@@ -657,5 +656,37 @@ describe("analyze", () => {
       expect(excludePatterns).toContain("**/node_modules/**");
       expect(excludePatterns).toContain("**/*.test.ts");
     });
+  });
+
+  it("forwards source content to coveragePort.parse for accurate line mapping", async () => {
+    const comp = makeComplexity("src/math.ts", "add", 2, span(1, 5));
+    const cov = makeCoverage("src/math.ts", "add", 100, span(1, 5));
+    const sourceContent = "function add(a, b) { return a + b; }";
+
+    let receivedSources: ReadonlyMap<string, string> | undefined;
+
+    const deps = createDeps({
+      complexityPort: fakeComplexityPort(
+        new Map([["src/math.ts", [comp]]]),
+      ),
+      coveragePort: {
+        parse(_data: unknown, sources?: ReadonlyMap<string, string>) {
+          receivedSources = sources;
+          return {
+            coverage: new Map([["src/math.ts", [cov]]]),
+            warnings: [],
+          };
+        },
+      },
+      matcher: fakeMatcher([{ complexity: comp, coverage: cov }]),
+      findFiles: async () => ["src/math.ts"],
+      readFile: async () => sourceContent,
+      readJson: async () => ({}),
+    });
+
+    await analyze({ cwd: "/project", coverage: "/project/coverage.json" }, deps);
+
+    expect(receivedSources).toBeDefined();
+    expect(receivedSources!.get("src/math.ts")).toBe(sourceContent);
   });
 });
