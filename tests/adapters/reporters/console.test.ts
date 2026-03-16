@@ -80,13 +80,14 @@ function makeResult(
   summary: AnalysisSummary,
   passed: boolean,
   threshold = 12,
+  overrides: ThresholdConfig["overrides"] = [],
 ): AnalysisResult {
   return {
     functions,
     unmatched: [],
     warnings: [],
     summary,
-    thresholdConfig: { defaultThreshold: threshold, overrides: [] } satisfies ThresholdConfig,
+    thresholdConfig: { defaultThreshold: threshold, overrides } satisfies ThresholdConfig,
     passed,
   };
 }
@@ -224,6 +225,85 @@ describe("ConsoleReporter", () => {
       const output = reporter.format(result);
 
       expect(output).toContain("15");
+    });
+
+    it("shows Threshold column when overrides are active", () => {
+      const v1 = makeVerdict("src/cli/run.ts", "runCli", 5, 60.0, 10.0, 20);
+      const v2 = makeVerdict("src/domain/calc.ts", "calculate", 3, 90.0, 3.0, 12);
+
+      const overrides = [{ glob: "src/cli/**", threshold: 20 }];
+      const result = makeResult(
+        [v1, v2],
+        makeSummary({
+          totalFunctions: 2,
+          totalFiles: 2,
+          exceedingThreshold: 0,
+          maxCrap: makeScore(10.0),
+        }),
+        true,
+        12,
+        overrides,
+      );
+
+      const reporter = new ConsoleReporter({ color: false });
+      const output = reporter.format(result);
+
+      // Should have a Threshold column header
+      expect(output).toContain("Threshold");
+
+      // Each row should show its effective threshold
+      // v1 has threshold 20, v2 has threshold 12
+      const lines = output.split("\n");
+      const cliRow = lines.find((l) => l.includes("runCli"));
+      const domainRow = lines.find((l) => l.includes("calculate"));
+      expect(cliRow).toContain("20");
+      expect(domainRow).toContain("12");
+    });
+
+    it("shows overrides-active indicator in summary when overrides exist", () => {
+      const overrides = [{ glob: "src/cli/**", threshold: 20 }];
+      const result = makeResult(
+        [],
+        makeSummary({ totalFunctions: 5, exceedingThreshold: 1, maxCrap: makeScore(15) }),
+        false,
+        12,
+        overrides,
+      );
+
+      const reporter = new ConsoleReporter({ color: false });
+      const output = reporter.format(result);
+
+      expect(output).toContain("default: 12");
+      expect(output).toContain("overrides active");
+    });
+
+    it("does not show Threshold column when no overrides exist", () => {
+      const v1 = makeVerdict("src/utils.ts", "add", 1, 100.0, 1.0, 12);
+
+      const result = makeResult(
+        [v1],
+        makeSummary({
+          totalFunctions: 1,
+          totalFiles: 1,
+          exceedingThreshold: 0,
+          maxCrap: makeScore(1.0),
+        }),
+        true,
+        12,
+      );
+
+      const reporter = new ConsoleReporter({ color: false });
+      const output = reporter.format(result);
+
+      // The word "Threshold" should NOT appear as a column header
+      // (it may appear in the summary line as part of "above threshold")
+      const lines = output.split("\n");
+      const headerLine = lines.find((l) => l.includes("File") && l.includes("Function"));
+      expect(headerLine).not.toContain("Threshold");
+
+      // Summary should show plain threshold number, not "overrides active"
+      expect(output).not.toContain("overrides active");
+      expect(output).toContain("above threshold (12)");
     });
   });
 

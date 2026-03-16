@@ -26,6 +26,7 @@ export class ConsoleReporter implements ReporterPort {
 
     // ── Table ───────────────────────────────────────────────────────
     const verdicts = result.functions;
+    const hasOverrides = thresholdConfig.overrides.length > 0;
 
     if (verdicts.length > 0) {
       // Column widths
@@ -40,16 +41,33 @@ export class ConsoleReporter implements ReporterPort {
       const ccW = 4;
       const covW = 6;
       const crapW = 6;
+      const threshW = "Threshold".length;
 
       // Header row
-      lines.push(
-        ` ${"File".padEnd(fileW)}  ${"Function".padEnd(fnW)}  ${"CC".padStart(ccW)}  ${"Cov%".padStart(covW)}  ${"CRAP".padStart(crapW)}`,
-      );
+      const headerCols = [
+        "File".padEnd(fileW),
+        "Function".padEnd(fnW),
+        "CC".padStart(ccW),
+        "Cov%".padStart(covW),
+        "CRAP".padStart(crapW),
+      ];
+      if (hasOverrides) {
+        headerCols.push("Threshold".padStart(threshW));
+      }
+      lines.push(` ${headerCols.join("  ")}`);
 
       // Separator
-      lines.push(
-        ` ${"─".repeat(fileW)}  ${"─".repeat(fnW)}  ${"─".repeat(ccW)}  ${"─".repeat(covW)}  ${"─".repeat(crapW)}`,
-      );
+      const sepCols = [
+        "─".repeat(fileW),
+        "─".repeat(fnW),
+        "─".repeat(ccW),
+        "─".repeat(covW),
+        "─".repeat(crapW),
+      ];
+      if (hasOverrides) {
+        sepCols.push("─".repeat(threshW));
+      }
+      lines.push(` ${sepCols.join("  ")}`);
 
       // Data rows
       for (const v of verdicts) {
@@ -65,20 +83,26 @@ export class ConsoleReporter implements ReporterPort {
           ? this.c.bold.red(crapStr)
           : crapStr;
 
-        lines.push(` ${filePath}  ${fnName}  ${cc}  ${coloredCov}  ${coloredCrap}`);
+        const rowCols = [filePath, fnName, cc, coloredCov, coloredCrap];
+        if (hasOverrides) {
+          rowCols.push(String(v.threshold).padStart(threshW));
+        }
+        lines.push(` ${rowCols.join("  ")}`);
       }
 
       lines.push("");
     }
 
     // ── Summary ─────────────────────────────────────────────────────
-    const threshold = thresholdConfig.defaultThreshold;
+    const thresholdLabel = hasOverrides
+      ? `default: ${thresholdConfig.defaultThreshold}, overrides active`
+      : String(thresholdConfig.defaultThreshold);
     const passFailLabel = result.passed
       ? this.c.bold.green("PASS")
       : this.c.bold.red("FAIL");
 
     lines.push(
-      ` Summary: ${summary.totalFunctions} functions | ${summary.exceedingThreshold} above threshold (${threshold}) | worst: ${summary.maxCrap.value.toFixed(1)} | ${passFailLabel}`,
+      ` Summary: ${summary.totalFunctions} functions | ${summary.exceedingThreshold} above threshold (${thresholdLabel}) | worst: ${summary.maxCrap.value.toFixed(1)} | ${passFailLabel}`,
     );
     lines.push("");
 
