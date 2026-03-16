@@ -41,31 +41,31 @@ export class ConsoleReporter implements ReporterPort {
       const ccW = 4;
       const covW = 6;
       const crapW = 6;
-      const threshW = 9; // "Threshold".length
+      const threshW = "Threshold".length;
 
       // Header row
       const headerCols = [
-        `${"File".padEnd(fileW)}`,
-        `${"Function".padEnd(fnW)}`,
-        `${"CC".padStart(ccW)}`,
-        `${"Cov%".padStart(covW)}`,
-        `${"CRAP".padStart(crapW)}`,
+        "File".padEnd(fileW),
+        "Function".padEnd(fnW),
+        "CC".padStart(ccW),
+        "Cov%".padStart(covW),
+        "CRAP".padStart(crapW),
       ];
       if (hasOverrides) {
-        headerCols.push(`${"Threshold".padStart(threshW)}`);
+        headerCols.push("Threshold".padStart(threshW));
       }
       lines.push(` ${headerCols.join("  ")}`);
 
       // Separator
       const sepCols = [
-        `${"─".repeat(fileW)}`,
-        `${"─".repeat(fnW)}`,
-        `${"─".repeat(ccW)}`,
-        `${"─".repeat(covW)}`,
-        `${"─".repeat(crapW)}`,
+        "─".repeat(fileW),
+        "─".repeat(fnW),
+        "─".repeat(ccW),
+        "─".repeat(covW),
+        "─".repeat(crapW),
       ];
       if (hasOverrides) {
-        sepCols.push(`${"─".repeat(threshW)}`);
+        sepCols.push("─".repeat(threshW));
       }
       lines.push(` ${sepCols.join("  ")}`);
 
