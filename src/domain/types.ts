@@ -196,3 +196,4 @@ export class InvalidCoverageError extends Error {
     this.name = "InvalidCoverageError";
   }
 }
+
