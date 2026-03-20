@@ -4,8 +4,8 @@ export default defineConfig({
   entry: {
     index: "src/core/index.ts",
     formula: "src/domain/crap.ts",
-    complexity: "src/adapters/complexity/typescript-eslint.ts",
-    coverage: "src/adapters/coverage/index.ts",
+    complexity: "src/adapters/complexity/facade.ts",
+    coverage: "src/adapters/coverage/facade.ts",
     cli: "src/cli/cli.ts",
   },
   format: ["esm", "cjs"],
