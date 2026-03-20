@@ -5,6 +5,7 @@ import {
   resolveThreshold,
 } from "../domain/threshold.js";
 import { computeSummary } from "../domain/summary.js";
+import { shouldInclude } from "../domain/filtering.js";
 import type {
   AnalyzeOptions,
   AnalysisResult,
@@ -13,28 +14,12 @@ import type {
   Warning,
   FunctionComplexity,
   FunctionCoverage,
-  MatchFunctions,
+  FunctionFilter,
   ThresholdConfig,
   ScoredFunction,
 } from "../domain/types.js";
-import type { ComplexityPort } from "../ports/complexity-port.js";
-import type { CoveragePort } from "../ports/coverage-port.js";
-import type { GlobMatcher } from "../domain/threshold.js";
-
-// ── Dependency Injection Interface ────────────────────────────────
-
-export interface AnalyzeDeps {
-  complexityPort: ComplexityPort;
-  coveragePort: CoveragePort;
-  matcher: MatchFunctions;
-  globMatcher: GlobMatcher;
-  readFile: (path: string) => Promise<string>;
-  readJson: (path: string) => Promise<unknown>;
-  findFiles: (
-    patterns: string[],
-    options: { cwd: string; exclude: string[] },
-  ) => Promise<string[]>;
-}
+import type { AnalyzeDeps } from "./deps.js";
+export type { AnalyzeDeps };
 
 // ── Main Entry Point ──────────────────────────────────────────────
 
@@ -72,17 +57,22 @@ export async function analyze(
     allComplexities.push(...fileComplexities);
   }
 
-  // 4. Read coverage data (pass source content for accurate line mapping)
+  // 4. Apply function filter (if provided)
+  const complexitiesToMatch = opts.filter
+    ? allComplexities.filter((c) => shouldInclude(opts.filter!, c.identity))
+    : allComplexities;
+
+  // 5. Read coverage data (pass source content for accurate line mapping)
   const { coverage: coverageData, warnings: coverageWarnings } =
     await loadCoverageData(resolvedDeps, opts.coveragePath, sourceContents);
 
-  // 5. Flatten all coverage data
+  // 6. Flatten all coverage data
   const allCoverages = flattenCoverages(coverageData);
 
-  // 6. Match complexity with coverage
-  const matchResult = resolvedDeps.matcher(allComplexities, allCoverages);
+  // 7. Match complexity with coverage
+  const matchResult = resolvedDeps.matcher(complexitiesToMatch, allCoverages);
 
-  // 7. Score each matched pair and create verdicts
+  // 8. Score each matched pair and create verdicts
   const allVerdicts: FunctionVerdict[] = [];
   const allUnmatched: UnmatchedFunction[] = [];
 
@@ -109,7 +99,7 @@ export async function analyze(
     });
   }
 
-  // 8. Handle unmatched complexity (no-coverage: worst-case 0%)
+  // 9. Handle unmatched complexity (no-coverage: worst-case 0%)
   for (const complexity of matchResult.unmatchedComplexity) {
     const worstCaseCrap = computeCrap(complexity.cyclomaticComplexity, 0);
     allUnmatched.push({
@@ -119,7 +109,7 @@ export async function analyze(
     });
   }
 
-  // 9. Handle unmatched coverage (no-ast: informational)
+  // 10. Handle unmatched coverage (no-ast: informational)
   for (const coverage of matchResult.unmatchedCoverage) {
     allUnmatched.push({
       kind: "no-ast",
@@ -127,8 +117,15 @@ export async function analyze(
     });
   }
 
-  // 10. Collect warnings from coverage parsing and unmatched
+  // 11. Collect warnings from coverage parsing, unmatched, and filter
   const warnings: Warning[] = [...coverageWarnings];
+
+  if (opts.filter && complexitiesToMatch.length === 0 && allComplexities.length > 0) {
+    warnings.push({
+      code: "filter-excluded-all",
+      message: `Filter "${opts.filter.description}" excluded all ${allComplexities.length} functions. No functions overlap with changed lines.`,
+    });
+  }
   for (const u of allUnmatched) {
     if (u.kind === "no-coverage") {
       warnings.push({
@@ -147,10 +144,10 @@ export async function analyze(
     }
   }
 
-  // 11. Compute overall summary
+  // 12. Compute overall summary
   const summary = computeSummary(allVerdicts);
 
-  // 12. Determine pass/fail
+  // 13. Determine pass/fail
   const passed = allVerdicts.every((v) => !v.exceeds);
 
   return { functions: allVerdicts, unmatched: allUnmatched, warnings, summary, thresholdConfig, passed };
@@ -174,6 +171,7 @@ interface ResolvedOptions {
   coverageMetric: "line" | "branch";
   include: string[];
   exclude: string[];
+  filter: FunctionFilter | undefined;
 }
 
 function resolveIncludePatterns(options?: AnalyzeOptions): string[] {
@@ -201,6 +199,7 @@ function resolveOptions(options?: AnalyzeOptions): ResolvedOptions {
     coverageMetric: opts.coverageMetric ?? "line",
     include: resolveIncludePatterns(options),
     exclude: opts.exclude ?? DEFAULT_EXCLUDE,
+    filter: opts.filter,
   };
 }
 
@@ -245,7 +244,7 @@ export function extractCoveragePercent(
   if (metric === "branch") {
     return coverage.branchCoverage !== null
       ? coverage.branchCoverage.percent
-      : 100; // No branches = fully covered
+      : 100; // A function with no branches has trivially 100% branch coverage
   }
   return coverage.lineCoverage.percent;
 }

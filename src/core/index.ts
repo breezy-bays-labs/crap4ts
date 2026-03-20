@@ -1,5 +1,5 @@
 export { analyze } from "./analyze.js";
-export type { AnalyzeDeps } from "./analyze.js";
+export type { AnalyzeDeps } from "./deps.js";
 export { analyzeFile } from "./analyze-file.js";
 export type { AnalyzeFileOptions, AnalyzeFileResult } from "./analyze-file.js";
 export { defineConfig } from "./define-config.js";
@@ -15,6 +15,7 @@ export type {
   ScoredFunction,
   CrapScore,
   FunctionIdentity,
+  FunctionFilter,
   SourceSpan,
   ThresholdConfig,
   ThresholdOverride,

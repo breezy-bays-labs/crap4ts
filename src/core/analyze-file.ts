@@ -12,7 +12,7 @@ import type {
   ThresholdConfig,
 } from "../domain/types.js";
 import { extractCoveragePercent, flattenCoverages } from "./analyze.js";
-import type { AnalyzeDeps } from "./analyze.js";
+import type { AnalyzeDeps } from "./deps.js";
 
 // ── Single-File Analysis ──────────────────────────────────────────
 

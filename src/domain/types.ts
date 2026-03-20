@@ -88,7 +88,8 @@ export type WarningCode =
   | "unmatched-no-coverage"
   | "unmatched-no-ast"
   | "approximate-span"
-  | "missing-coverage-file";
+  | "missing-coverage-file"
+  | "filter-excluded-all";
 
 export interface Warning {
   readonly code: WarningCode;
@@ -175,7 +176,7 @@ export interface AnalyzeOptions {
   coverageMetric?: "line" | "branch";
   include?: string[];
   exclude?: string[];
-  changedSince?: string;
+  filter?: FunctionFilter;
   cwd?: string;
   signal?: AbortSignal;
 }

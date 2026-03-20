@@ -6,6 +6,9 @@ reports/
 *.tsbuildinfo
 .DS_Store
 
+# Logs
+*.log
+
 # Claude Code
 .claude/*
 !.claude/rules/

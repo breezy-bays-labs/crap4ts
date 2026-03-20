@@ -19,13 +19,90 @@ const defaultExec: ExecFn = async (command: string, args: string[]) => {
     const { stdout } = await execFileAsync(command, args);
     return { stdout, exitCode: 0 };
   } catch (error: unknown) {
-    const execError = error as { stdout?: string; code?: number };
-    return {
-      stdout: execError.stdout ?? "",
-      exitCode: execError.code ?? 1,
-    };
+    if (error instanceof Error && "code" in error) {
+      const execError = error as { stdout?: string; code?: number | string };
+      // ENOENT = binary not found in PATH
+      if (execError.code === "ENOENT") {
+        throw new Error(`"${command}" is not installed or not in PATH`);
+      }
+      // Normal child process non-zero exit
+      if (typeof execError.code === "number") {
+        return {
+          stdout: execError.stdout ?? "",
+          exitCode: execError.code,
+        };
+      }
+    }
+    // Unexpected error shape — do not suppress
+    throw error;
   }
 };
+
+// ── parseUnifiedDiff ────────────────────────────────────────────────
+
+/** Captures file path from "diff --git a/... b/..." */
+const DIFF_HEADER_RE = /^diff --git a\/.+ b\/(.+)$/;
+/** Captures start line and optional count from "@@ -old +start,count @@" */
+const HUNK_RE = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/;
+
+/**
+ * Parses `git diff --unified=0` output into a map of file paths to
+ * line-level spans. New files (--- /dev/null) map to `null` (whole-file).
+ */
+export function parseUnifiedDiff(
+  raw: string,
+): Map<string, ReadonlyArray<SourceSpan> | null> {
+  const result = new Map<string, ReadonlyArray<SourceSpan> | null>();
+  if (!raw.trim()) return result;
+
+  let currentFile: string | null = null;
+  let isNewFile = false;
+  let spans: SourceSpan[] = [];
+
+  const flushFile = () => {
+    if (currentFile !== null) {
+      if (isNewFile) {
+        result.set(currentFile, null);
+      } else {
+        result.set(currentFile, spans);
+      }
+    }
+  };
+
+  for (const line of raw.split("\n")) {
+    const headerMatch = line.match(DIFF_HEADER_RE);
+    if (headerMatch) {
+      flushFile();
+      currentFile = headerMatch[1]!.replace(/\\/g, "/");
+      isNewFile = false;
+      spans = [];
+      continue;
+    }
+
+    if (line === "--- /dev/null") {
+      isNewFile = true;
+      continue;
+    }
+
+    const hunkMatch = line.match(HUNK_RE);
+    if (hunkMatch && !isNewFile) {
+      const start = parseInt(hunkMatch[1]!, 10);
+      const count = hunkMatch[2] !== undefined ? parseInt(hunkMatch[2]!, 10) : 1;
+      // count=0 means deletion-only hunk (no new lines added); skip
+      if (count > 0) {
+        spans.push({
+          startLine: start,
+          endLine: start + count,
+          startColumn: 0,
+          endColumn: 0,
+        });
+      }
+    }
+  }
+
+  flushFile();
+  return result;
+}
 
 // ── getChangedFiles ─────────────────────────────────────────────────
 
@@ -35,11 +112,9 @@ interface GetChangedFilesOptions {
 }
 
 /**
- * Runs `git diff --name-only <ref>` and produces a FunctionFilter
- * where each changed file maps to `null` spans (whole-file changed).
- *
- * V1 uses whole-file filtering only — line-level span filtering
- * is a future enhancement.
+ * Runs `git diff --unified=0 <ref>` and produces a FunctionFilter
+ * with line-level spans for each changed file.
+ * New files map to `null` (whole-file changed).
  */
 export async function getChangedFiles(
   ref: string,
@@ -55,27 +130,17 @@ export async function getChangedFiles(
   const exec = options?.exec ?? defaultExec;
 
   // Use -- separator to prevent git from interpreting ref as flags
-  const { stdout, exitCode } = await exec("git", ["diff", "--name-only", ref, "--"]);
+  const { stdout, exitCode } = await exec("git", ["diff", "--unified=0", ref, "--"]);
+  const safeRef = ref.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
 
   if (exitCode !== 0) {
-    const safeRef = ref.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
     throw new Error(
       `git diff failed with exit code ${exitCode}: ${stdout.trim()} (ref: ${safeRef})`,
     );
   }
 
-  const files = stdout
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((file) => file.replace(/\\/g, "/"));
+  const changedFiles = parseUnifiedDiff(stdout);
 
-  const changedFiles = new Map<string, ReadonlyArray<SourceSpan> | null>();
-  for (const file of files) {
-    changedFiles.set(file, null);
-  }
-
-  const safeRef = ref.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
   return {
     description: `Changed since ${safeRef}`,
     changedFiles,

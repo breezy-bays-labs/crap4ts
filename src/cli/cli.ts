@@ -15,8 +15,7 @@ import {
   discoverSourceRoot,
   formatCoverageNotFoundError,
 } from "./discover.js";
-// getChangedFiles is available for future --changed-since enhancements
-// import { getChangedFiles } from "./diff.js";
+import { getChangedFiles } from "./diff.js";
 import { ConsoleReporter } from "../adapters/reporters/console.js";
 import { JsonReporter } from "../adapters/reporters/json.js";
 import { MarkdownReporter } from "../adapters/reporters/markdown.js";
@@ -217,7 +216,9 @@ program.action(async (opts: Record<string, unknown>) => {
         coverageMetric: resolved.coverageMetric ?? "line",
         include: resolved.include,
         exclude: resolved.exclude,
-        changedSince: changedSinceRef,
+        filter: changedSinceRef
+          ? await getChangedFiles(changedSinceRef, { cwd })
+          : undefined,
         cwd,
       });
     } catch (err) {
@@ -357,7 +358,7 @@ function sortVerdicts(
   verdicts: FunctionVerdict[],
   field: string,
 ): FunctionVerdict[] {
-  const sorted = [...verdicts];
+  const sorted = verdicts;
 
   switch (field) {
     case "crap":

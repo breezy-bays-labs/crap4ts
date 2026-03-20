@@ -6,7 +6,7 @@ import { defaultSpanMatcher } from "../domain/matching.js";
 import picomatch from "picomatch";
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
-import type { AnalyzeDeps } from "./analyze.js";
+import type { AnalyzeDeps } from "./deps.js";
 import type { CoveragePort, CoverageParseResult } from "../ports/coverage-port.js";
 
 // ── Auto-Detecting Coverage Port ──────────────────────────────────

@@ -3,6 +3,7 @@ import { analyze, extractCoveragePercent } from "../../src/core/analyze.js";
 import type {
   FunctionComplexity,
   FunctionCoverage,
+  FunctionFilter,
   MatchResult,
   MatchFunctions,
   SourceSpan,
@@ -474,47 +475,143 @@ describe("analyze", () => {
     expect(result.functions[0]!.scored.coveragePercent).toBe(100);
   });
 
-  it("changedSince option filters to only changed files", async () => {
-    // findFiles returns all source files, but we only analyze changed ones
-    const comp = makeComplexity("src/changed.ts", "fn", 2, span(1, 10));
-    const cov = makeCoverage("src/changed.ts", "fn", 100, span(1, 10));
+  describe("filter integration", () => {
+    // Three functions in one file with distinct spans
+    const comp1 = makeComplexity("src/app.ts", "fn1", 2, span(1, 10));
+    const comp2 = makeComplexity("src/app.ts", "fn2", 3, span(15, 25));
+    const comp3 = makeComplexity("src/app.ts", "fn3", 1, span(30, 40));
+    const cov1 = makeCoverage("src/app.ts", "fn1", 80, span(1, 10));
+    const cov2 = makeCoverage("src/app.ts", "fn2", 60, span(15, 25));
+    const cov3 = makeCoverage("src/app.ts", "fn3", 100, span(30, 40));
 
-    const filesRequested: string[] = [];
+    function depsForFilter(
+      complexities: FunctionComplexity[],
+      coverages: FunctionCoverage[],
+    ): AnalyzeDeps {
+      // Use a real-ish matcher that pairs by name
+      const matcher: MatchFunctions = (comps, covs) => {
+        const matched: Array<{ complexity: FunctionComplexity; coverage: FunctionCoverage }> = [];
+        const unmatchedComplexity: FunctionComplexity[] = [];
+        for (const c of comps) {
+          const cov = covs.find((cv) => cv.name === c.identity.qualifiedName);
+          if (cov) {
+            matched.push({ complexity: c, coverage: cov });
+          } else {
+            unmatchedComplexity.push(c);
+          }
+        }
+        return { matched, unmatchedComplexity, unmatchedCoverage: [] };
+      };
 
-    const deps = createDeps({
-      complexityPort: {
-        extract(_, filePath) {
-          filesRequested.push(filePath);
-          if (filePath === "src/changed.ts") return [comp];
-          return [];
-        },
-      },
-      coveragePort: fakeCoveragePort(
-        new Map([["src/changed.ts", [cov]]]),
-      ),
-      matcher: fakeMatcher([{ complexity: comp, coverage: cov }]),
-      // findFiles returns all files initially, but changedSince filters them
-      findFiles: async () => ["src/changed.ts", "src/unchanged.ts"],
-      readFile: async () => "// source",
-      readJson: async () => ({}),
+      return createDeps({
+        complexityPort: fakeComplexityPort(
+          new Map([["src/app.ts", complexities]]),
+        ),
+        coveragePort: fakeCoveragePort(
+          new Map([["src/app.ts", coverages]]),
+        ),
+        matcher,
+        findFiles: async () => ["src/app.ts"],
+        readFile: async () => "// source",
+        readJson: async () => ({}),
+      });
+    }
+
+    it("only changed functions are scored", async () => {
+      const filter: FunctionFilter = {
+        description: "test filter",
+        changedFiles: new Map([["src/app.ts", [span(18, 22)]]]),
+      };
+      const deps = depsForFilter([comp1, comp2, comp3], [cov1, cov2, cov3]);
+
+      const result = await analyze({ cwd: "/project", coverage: "/project/coverage.json", filter }, deps);
+
+      expect(result.functions).toHaveLength(1);
+      expect(result.functions[0]!.scored.identity.qualifiedName).toBe("fn2");
     });
 
-    const result = await analyze(
-      {
-        cwd: "/project",
-        changedSince: "main",
-        // We simulate the git diff filter by providing a custom findFiles
-        // In reality, changedSince would invoke git, but here we test the filtering
-      },
-      {
-        ...deps,
-        // Override findFiles to simulate changedSince filtering
-        findFiles: async () => ["src/changed.ts"],
-      },
-    );
+    it("no filter scores all functions", async () => {
+      const deps = depsForFilter([comp1, comp2, comp3], [cov1, cov2, cov3]);
 
-    expect(result.functions).toHaveLength(1);
-    expect(result.functions[0]!.scored.identity.filePath).toBe("src/changed.ts");
+      const result = await analyze({ cwd: "/project", coverage: "/project/coverage.json" }, deps);
+
+      expect(result.functions).toHaveLength(3);
+    });
+
+    it("whole-file filter (null spans) scores all functions in that file", async () => {
+      const filter: FunctionFilter = {
+        description: "whole file changed",
+        changedFiles: new Map([["src/app.ts", null]]),
+      };
+      const deps = depsForFilter([comp1, comp2, comp3], [cov1, cov2, cov3]);
+
+      const result = await analyze({ cwd: "/project", coverage: "/project/coverage.json", filter }, deps);
+
+      expect(result.functions).toHaveLength(3);
+    });
+
+    it("emits filter-excluded-all warning when filter matches no functions", async () => {
+      const filter: FunctionFilter = {
+        description: "changes in other file",
+        changedFiles: new Map([["src/other.ts", [span(1, 5)]]]),
+      };
+      const deps = depsForFilter([comp1, comp2, comp3], [cov1, cov2, cov3]);
+
+      const result = await analyze({ cwd: "/project", coverage: "/project/coverage.json", filter }, deps);
+
+      expect(result.functions).toHaveLength(0);
+      expect(result.warnings).toContainEqual(
+        expect.objectContaining({
+          code: "filter-excluded-all",
+        }),
+      );
+    });
+
+    it("functions in unchanged files are excluded", async () => {
+      const compB = makeComplexity("src/b.ts", "other", 4, span(1, 10));
+      const covB = makeCoverage("src/b.ts", "other", 50, span(1, 10));
+
+      const filter: FunctionFilter = {
+        description: "only a.ts changed",
+        changedFiles: new Map([["src/a.ts", null]]),
+      };
+
+      const compA = makeComplexity("src/a.ts", "kept", 2, span(1, 10));
+      const covA = makeCoverage("src/a.ts", "kept", 90, span(1, 10));
+
+      const matcher: MatchFunctions = (comps, covs) => {
+        const matched: Array<{ complexity: FunctionComplexity; coverage: FunctionCoverage }> = [];
+        for (const c of comps) {
+          const cov = covs.find((cv) => cv.name === c.identity.qualifiedName);
+          if (cov) matched.push({ complexity: c, coverage: cov });
+        }
+        return { matched, unmatchedComplexity: [], unmatchedCoverage: [] };
+      };
+
+      const deps = createDeps({
+        complexityPort: fakeComplexityPort(
+          new Map([
+            ["src/a.ts", [compA]],
+            ["src/b.ts", [compB]],
+          ]),
+        ),
+        coveragePort: fakeCoveragePort(
+          new Map([
+            ["src/a.ts", [covA]],
+            ["src/b.ts", [covB]],
+          ]),
+        ),
+        matcher,
+        findFiles: async () => ["src/a.ts", "src/b.ts"],
+        readFile: async () => "// source",
+        readJson: async () => ({}),
+      });
+
+      const result = await analyze({ cwd: "/project", coverage: "/project/coverage.json", filter }, deps);
+
+      expect(result.functions).toHaveLength(1);
+      expect(result.functions[0]!.scored.identity.filePath).toBe("src/a.ts");
+    });
   });
 
   it("returns thresholdConfig in result", async () => {
