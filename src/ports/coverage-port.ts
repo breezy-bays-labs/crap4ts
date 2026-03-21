@@ -9,12 +9,12 @@ export interface CoveragePort {
   /**
    * Parse coverage data into per-file function coverage entries.
    *
-   * @param data - Raw coverage data (Istanbul JSON object or V8 array/result).
+   * @param data - Raw coverage data in a format recognized by the implementing adapter.
    * @param sources - Optional source text keyed by file path. When provided,
-   *   V8 adapters use source text for precise byte-offset-to-line mapping
-   *   (eliminating approximate-span warnings). Istanbul adapters accept the
-   *   parameter for interface uniformity but currently ignore it — Istanbul
-   *   coverage JSON already contains line-level data.
+   *   adapters that use byte-offset ranges (e.g. V8) can perform precise
+   *   byte-offset-to-line mapping, eliminating approximate-span warnings.
+   *   Adapters whose format already contains line-level data ignore this
+   *   parameter — it is accepted for interface uniformity.
    */
   parse(
     data: unknown,

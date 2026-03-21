@@ -224,6 +224,28 @@ describe("parseCoverageFile", () => {
     expect(asyncResult.warnings).toEqual(syncResult.warnings);
   });
 
+  it("forwards options to sync parseCoverage", async () => {
+    // Istanbul fixture has absolute paths like /projects/my-app/src/math.ts
+    const filePath = join(FIXTURES_DIR, "istanbul-coverage.json");
+    const result = await parseCoverageFile(filePath, { cwd: "/projects/my-app" });
+    const keys = [...result.coverage.keys()];
+    expect(keys.some((k) => k === "src/math.ts")).toBe(true);
+  });
+
+  it("throws CoverageParseError for non-JSON-object file", async () => {
+    const scalarFile = join(TMP_DIR, "scalar.json");
+    writeFileSync(scalarFile, '"just a string"');
+
+    try {
+      await parseCoverageFile(scalarFile);
+      expect.fail("Should have thrown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(CoverageParseError);
+      expect((error as CoverageParseError).message).toContain("does not contain a JSON object");
+      expect((error as CoverageParseError).filePath).toBe(scalarFile);
+    }
+  });
+
   // --- Error handling (async) ---
 
   it("throws CoverageParseError for non-existent file", async () => {

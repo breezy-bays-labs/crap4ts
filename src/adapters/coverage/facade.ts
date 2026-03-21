@@ -3,12 +3,7 @@ import { IstanbulCoverageAdapter } from "./istanbul.js";
 import { V8CoverageAdapter } from "./v8.js";
 import { detectCoverageFormat } from "./detect.js";
 import type { CoverageFormat } from "./detect.js";
-import type {
-  FunctionCoverage,
-  Warning,
-} from "../../domain/types.js";
-import type { CoveragePort } from "../../ports/coverage-port.js";
-import type { CoverageParseResult } from "../../ports/coverage-port.js";
+import type { CoveragePort, CoverageParseResult } from "../../ports/coverage-port.js";
 
 // ── API Boundary Errors ───────────────────────────────────────────
 
@@ -40,10 +35,7 @@ export interface ParseCoverageOptions {
   readonly cwd?: string;
 }
 
-export interface ParseCoverageResult {
-  readonly coverage: ReadonlyMap<string, ReadonlyArray<FunctionCoverage>>;
-  readonly warnings: ReadonlyArray<Warning>;
-}
+export type ParseCoverageResult = CoverageParseResult;
 
 // ── Factory ──────────────────────────────────────────────────────
 
@@ -62,7 +54,14 @@ export function createAutoDetectCoveragePort(
         throw new UnsupportedFormatError();
       }
       const adapter = format === "istanbul" ? istanbul : v8;
-      return adapter.parse(data, sources);
+      try {
+        return adapter.parse(data, sources);
+      } catch (error) {
+        if (error instanceof CoverageParseError) throw error;
+        throw new CoverageParseError("Failed to parse coverage data", undefined, {
+          cause: error,
+        });
+      }
     },
   };
 }
@@ -127,7 +126,14 @@ export async function parseCoverageFile(
     );
   }
 
-  return parseCoverage(data as object, options);
+  if (data === null || typeof data !== "object") {
+    throw new CoverageParseError(
+      `Coverage file does not contain a JSON object: ${filePath}`,
+      filePath,
+    );
+  }
+
+  return parseCoverage(data, options);
 }
 
 // ── Internal Helpers ──────────────────────────────────────────────
