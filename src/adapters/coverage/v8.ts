@@ -233,17 +233,19 @@ export class V8CoverageAdapter implements CoveragePort {
       ? buildLineOffsetTable(sourceContent)
       : null;
 
+    const needsApproximationWarning =
+      !lineTable &&
+      !warnedFiles.has(relativePath) &&
+      script.functions.some((fn) => fn.functionName && fn.ranges.length > 0);
+
     let warning: Warning | null = null;
-    if (!lineTable && !warnedFiles.has(relativePath)) {
-      const hasFunctions = script.functions.some((fn) => fn.functionName && fn.ranges.length > 0);
-      if (hasFunctions) {
-        warning = {
-          code: "approximate-span",
-          message: `Source content unavailable for "${relativePath}" — using approximate byte-to-line conversion`,
-          file: relativePath,
-        };
-        warnedFiles.add(relativePath);
-      }
+    if (needsApproximationWarning) {
+      warning = {
+        code: "approximate-span",
+        message: `Source content unavailable for "${relativePath}" — using approximate byte-to-line conversion`,
+        file: relativePath,
+      };
+      warnedFiles.add(relativePath);
     }
 
     const functions: FunctionCoverage[] = [];

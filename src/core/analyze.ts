@@ -204,18 +204,16 @@ function scoreMatchedPairs(
 }
 
 function collectUnmatched(matchResult: MatchResult): UnmatchedFunction[] {
-  const unmatched: UnmatchedFunction[] = [];
-  for (const complexity of matchResult.unmatchedComplexity) {
-    unmatched.push({
-      kind: "no-coverage",
-      complexity,
-      worstCaseCrap: computeCrap(complexity.cyclomaticComplexity, 0),
-    });
-  }
-  for (const coverage of matchResult.unmatchedCoverage) {
-    unmatched.push({ kind: "no-ast", coverage });
-  }
-  return unmatched;
+  const noCoverage: UnmatchedFunction[] = matchResult.unmatchedComplexity.map((complexity) => ({
+    kind: "no-coverage" as const,
+    complexity,
+    worstCaseCrap: computeCrap(complexity.cyclomaticComplexity, 0),
+  }));
+  const noAst: UnmatchedFunction[] = matchResult.unmatchedCoverage.map((coverage) => ({
+    kind: "no-ast" as const,
+    coverage,
+  }));
+  return [...noCoverage, ...noAst];
 }
 
 function collectWarnings(
@@ -235,24 +233,27 @@ function collectWarnings(
   }
 
   for (const u of unmatched) {
-    if (u.kind === "no-coverage") {
-      warnings.push({
-        code: "unmatched-no-coverage",
-        message: `No coverage data found for function "${u.complexity.identity.qualifiedName}"`,
-        file: u.complexity.identity.filePath,
-        function: u.complexity.identity.qualifiedName,
-      });
-    } else {
-      warnings.push({
-        code: "unmatched-no-ast",
-        message: `No AST match found for coverage entry "${u.coverage.name}"`,
-        file: u.coverage.filePath,
-        function: u.coverage.name,
-      });
-    }
+    warnings.push(unmatchedToWarning(u));
   }
 
   return warnings;
+}
+
+function unmatchedToWarning(u: UnmatchedFunction): Warning {
+  if (u.kind === "no-coverage") {
+    return {
+      code: "unmatched-no-coverage",
+      message: `No coverage data found for function "${u.complexity.identity.qualifiedName}"`,
+      file: u.complexity.identity.filePath,
+      function: u.complexity.identity.qualifiedName,
+    };
+  }
+  return {
+    code: "unmatched-no-ast",
+    message: `No AST match found for coverage entry "${u.coverage.name}"`,
+    file: u.coverage.filePath,
+    function: u.coverage.name,
+  };
 }
 
 function emptyResult(thresholdConfig: ThresholdConfig): AnalysisResult {
