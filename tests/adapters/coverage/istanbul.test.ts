@@ -195,4 +195,24 @@ describe("IstanbulCoverageAdapter", () => {
       expect(warnings).toEqual([]);
     });
   });
+
+  describe("sources parameter", () => {
+    it("accepts optional sources map without error", () => {
+      const sources = new Map<string, string>([
+        ["src/math.ts", "export function add(a: number, b: number) { return a + b; }"],
+      ]);
+      const result = adapter.parse(loadFixture(), sources);
+      expect(result.coverage).toBeInstanceOf(Map);
+      expect(result.coverage.size).toBeGreaterThan(0);
+    });
+
+    it("produces the same result with or without sources", () => {
+      const without = adapter.parse(loadFixture());
+      const sources = new Map<string, string>([["src/math.ts", "const x = 1;"]]);
+      const withSources = adapter.parse(loadFixture(), sources);
+
+      expect([...withSources.coverage.keys()]).toEqual([...without.coverage.keys()]);
+      expect(withSources.warnings).toEqual(without.warnings);
+    });
+  });
 });
