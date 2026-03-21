@@ -144,6 +144,16 @@ describe("parseCoverage", () => {
     }
   });
 
+  // --- cwd heuristic ---
+
+  it("without cwd uses heuristic path resolution", () => {
+    // Without cwd, adapter uses longest common prefix heuristic
+    const result = parseCoverage(istanbulData);
+    const keys = [...result.coverage.keys()];
+    // Paths should still be resolved (not raw absolute paths)
+    expect(keys.every((k) => !k.startsWith("/"))).toBe(true);
+  });
+
   // --- Edge cases ---
 
   it("empty Istanbul coverage data returns empty map", () => {
@@ -151,6 +161,32 @@ describe("parseCoverage", () => {
     const result = parseCoverage(emptyData, { format: "istanbul" });
     expect(result.coverage.size).toBe(0);
     expect(result.warnings).toEqual([]);
+  });
+
+  it("single-file Istanbul coverage data parses correctly", () => {
+    // Extract just one file entry from Istanbul fixture
+    const firstKey = Object.keys(istanbulData)[0]!;
+    const singleFile = { [firstKey]: istanbulData[firstKey] };
+    const result = parseCoverage(singleFile);
+    expect(result.coverage.size).toBe(1);
+  });
+
+  it("V8 result-wrapped object parses correctly", () => {
+    // v8Data is already { result: [...] } format
+    expect(v8Data).toHaveProperty("result");
+    const result = parseCoverage(v8Data);
+    expect(result.coverage).toBeInstanceOf(Map);
+    expect(result.coverage.size).toBeGreaterThan(0);
+  });
+
+  it("sources are forwarded uniformly to both formats", () => {
+    const sources = new Map<string, string>([["test.ts", "const x = 1;"]]);
+    // Istanbul — should accept without error
+    const istanbulResult = parseCoverage(istanbulData, { sources });
+    expect(istanbulResult.coverage.size).toBeGreaterThan(0);
+    // V8 — should accept and use sources
+    const v8Result = parseCoverage(v8Data, { sources });
+    expect(v8Result.coverage.size).toBeGreaterThan(0);
   });
 });
 
