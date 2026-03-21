@@ -153,7 +153,7 @@ export class IstanbulCoverageAdapter implements CoveragePort {
     this.cwd = cwd;
   }
 
-  parse(data: unknown): CoverageParseResult {
+  parse(data: unknown, _sources?: ReadonlyMap<string, string>): CoverageParseResult {
     if (data === null || typeof data !== "object" || Array.isArray(data)) {
       throw new Error(
         "Invalid Istanbul coverage data: expected an object keyed by file paths",

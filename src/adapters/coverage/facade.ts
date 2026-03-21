@@ -7,6 +7,8 @@ import type {
   FunctionCoverage,
   Warning,
 } from "../../domain/types.js";
+import type { CoveragePort } from "../../ports/coverage-port.js";
+import type { CoverageParseResult } from "../../ports/coverage-port.js";
 
 // ── API Boundary Errors ───────────────────────────────────────────
 
@@ -40,6 +42,28 @@ export interface ParseCoverageOptions {
 export interface ParseCoverageResult {
   readonly coverage: ReadonlyMap<string, ReadonlyArray<FunctionCoverage>>;
   readonly warnings: ReadonlyArray<Warning>;
+}
+
+// ── Factory ──────────────────────────────────────────────────────
+
+export function createAutoDetectCoveragePort(
+  cwd?: string,
+): CoveragePort {
+  const istanbul = new IstanbulCoverageAdapter(cwd);
+  const v8 = new V8CoverageAdapter(cwd);
+  return {
+    parse(
+      data: unknown,
+      sources?: ReadonlyMap<string, string>,
+    ): CoverageParseResult {
+      const format = detectCoverageFormat(data);
+      if (format === "unknown") {
+        throw new UnsupportedFormatError();
+      }
+      const adapter = format === "istanbul" ? istanbul : v8;
+      return adapter.parse(data, sources);
+    },
+  };
 }
 
 // ── Convenience Function ──────────────────────────────────────────

@@ -3,9 +3,11 @@ import { join } from "node:path";
 import { writeFileSync, mkdirSync, rmSync, readFileSync } from "node:fs";
 import {
   parseCoverage,
+  createAutoDetectCoveragePort,
   CoverageParseError,
   UnsupportedFormatError,
 } from "../../../src/adapters/coverage/facade.js";
+import type { CoveragePort } from "../../../src/ports/coverage-port.js";
 
 const FIXTURES_DIR = join(__dirname, "../../fixtures");
 const TMP_DIR = join(__dirname, "../../.tmp-facade");
@@ -188,5 +190,96 @@ describe("parseCoverage", () => {
       expect((error as CoverageParseError).message).toContain("Failed to parse");
       expect((error as CoverageParseError).cause).toBeDefined();
     }
+  });
+});
+
+// ── createAutoDetectCoveragePort (auto-detect-port.feature) ──────
+
+describe("createAutoDetectCoveragePort", () => {
+  // --- Factory creation (scenarios 1-2) ---
+
+  it("creates a valid CoveragePort with parse method", () => {
+    const port = createAutoDetectCoveragePort();
+    expect(port).toBeDefined();
+    expect(typeof port.parse).toBe("function");
+    // Satisfies CoveragePort interface
+    const typed: CoveragePort = port;
+    expect(typed).toBe(port);
+  });
+
+  it("accepts cwd parameter for path resolution", () => {
+    // Factory with cwd should create adapters that resolve paths relative to cwd
+    const port = createAutoDetectCoveragePort("/some/project");
+    expect(port).toBeDefined();
+    expect(typeof port.parse).toBe("function");
+  });
+
+  // --- Format dispatch (scenarios 3-5) ---
+
+  it("dispatches Istanbul data to Istanbul adapter", () => {
+    const port = createAutoDetectCoveragePort();
+    const result = port.parse(istanbulData);
+
+    expect(result.coverage).toBeInstanceOf(Map);
+    expect(result.coverage.size).toBeGreaterThan(0);
+    // Istanbul data has file paths as keys
+    const keys = [...result.coverage.keys()];
+    expect(keys.some((k) => k.includes("math.ts"))).toBe(true);
+  });
+
+  it("dispatches V8 data to V8 adapter", () => {
+    const port = createAutoDetectCoveragePort();
+    const result = port.parse(v8Data);
+
+    expect(result.coverage).toBeInstanceOf(Map);
+    expect(result.coverage.size).toBeGreaterThan(0);
+  });
+
+  it("throws UnsupportedFormatError for unknown data", () => {
+    const port = createAutoDetectCoveragePort();
+
+    expect(() => port.parse({ someRandomKey: 42 })).toThrow(
+      UnsupportedFormatError,
+    );
+  });
+
+  // --- Sources forwarded uniformly (scenarios 6-7) ---
+
+  it("forwards sources to V8 adapter", () => {
+    const port = createAutoDetectCoveragePort();
+
+    // Parse without sources — expect approximate-span warnings
+    const withoutSources = port.parse(v8Data);
+    const approxWithout = withoutSources.warnings.filter(
+      (w) => w.code === "approximate-span",
+    );
+    expect(approxWithout.length).toBeGreaterThan(0);
+
+    // Build sources map to suppress warnings
+    const fileKeys = [...withoutSources.coverage.keys()];
+    const sources = new Map<string, string>();
+    const dummySource = Array.from({ length: 500 }, (_, i) =>
+      `line ${i + 1}: ${"x".repeat(40)}`,
+    ).join("\n");
+    for (const key of fileKeys) {
+      sources.set(key, dummySource);
+    }
+
+    // Parse with sources — approximate-span warnings should be suppressed
+    const withSources = port.parse(v8Data, sources);
+    const approxWith = withSources.warnings.filter(
+      (w) => w.code === "approximate-span",
+    );
+    expect(approxWith).toHaveLength(0);
+  });
+
+  it("forwards sources to Istanbul adapter without error", () => {
+    const port = createAutoDetectCoveragePort();
+    const sources = new Map<string, string>([["test.ts", "const x = 1;"]]);
+
+    // Istanbul currently ignores sources but should accept the parameter
+    const result = port.parse(istanbulData, sources);
+    expect(result.coverage).toBeInstanceOf(Map);
+    expect(result.coverage.size).toBeGreaterThan(0);
   });
 });
