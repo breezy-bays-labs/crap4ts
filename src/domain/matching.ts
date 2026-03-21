@@ -69,17 +69,23 @@ function findCandidates(
   return candidates;
 }
 
+/**
+ * Returns true when `challenger` is a strictly better match than `current`.
+ * Priority: containment > overlap ratio > name match.
+ */
+function isBetterCandidate(challenger: Candidate, current: Candidate): boolean {
+  if (challenger.contains !== current.contains) return challenger.contains;
+  if (challenger.ratio !== current.ratio) return challenger.ratio > current.ratio;
+  return challenger.nameMatch && !current.nameMatch;
+}
+
 function selectBestCandidate(candidates: ReadonlyArray<Candidate>): Candidate | undefined {
   if (candidates.length === 0) return undefined;
 
   let best = candidates[0]!;
   for (let i = 1; i < candidates.length; i++) {
     const c = candidates[i]!;
-    if (c.contains && !best.contains) { best = c; continue; }
-    if (!c.contains && best.contains) continue;
-    if (c.ratio > best.ratio) { best = c; continue; }
-    if (c.ratio < best.ratio) continue;
-    if (c.nameMatch && !best.nameMatch) { best = c; }
+    if (isBetterCandidate(c, best)) best = c;
   }
 
   return best;
