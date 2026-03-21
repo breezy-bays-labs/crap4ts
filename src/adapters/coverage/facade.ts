@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { IstanbulCoverageAdapter } from "./istanbul.js";
 import { V8CoverageAdapter } from "./v8.js";
 import { detectCoverageFormat } from "./detect.js";
@@ -37,6 +37,7 @@ type UserFormat = Exclude<CoverageFormat, "unknown">;
 export interface ParseCoverageOptions {
   readonly format?: UserFormat;
   readonly sources?: ReadonlyMap<string, string>;
+  readonly cwd?: string;
 }
 
 export interface ParseCoverageResult {
@@ -66,16 +67,15 @@ export function createAutoDetectCoveragePort(
   };
 }
 
-// ── Convenience Function ──────────────────────────────────────────
-
-const istanbulAdapter = new IstanbulCoverageAdapter();
-const v8Adapter = new V8CoverageAdapter();
+// ── Sync: parseCoverage(data, options?) ──────────────────────────
 
 export function parseCoverage(
-  input: string | object,
+  data: object,
   options?: ParseCoverageOptions,
 ): ParseCoverageResult {
-  const data = resolveInput(input);
+  const cwd = options?.cwd;
+  const istanbul = new IstanbulCoverageAdapter(cwd);
+  const v8 = new V8CoverageAdapter(cwd);
 
   let format: UserFormat;
   try {
@@ -87,7 +87,7 @@ export function parseCoverage(
     });
   }
 
-  const adapter = format === "istanbul" ? istanbulAdapter : v8Adapter;
+  const adapter = format === "istanbul" ? istanbul : v8;
 
   try {
     return adapter.parse(data, options?.sources);
@@ -99,32 +99,38 @@ export function parseCoverage(
   }
 }
 
-// ── Internal Helpers ──────────────────────────────────────────────
+// ── Async: parseCoverageFile(path, options?) ─────────────────────
 
-function resolveInput(input: string | object): unknown {
-  if (typeof input !== "string") return input;
-
+export async function parseCoverageFile(
+  filePath: string,
+  options?: ParseCoverageOptions,
+): Promise<ParseCoverageResult> {
   let content: string;
   try {
-    content = readFileSync(input, "utf-8");
+    content = await readFile(filePath, "utf-8");
   } catch (error) {
     throw new CoverageParseError(
-      `Failed to read coverage file: ${input}`,
-      input,
+      `Failed to read coverage file: ${filePath}`,
+      filePath,
       { cause: error },
     );
   }
 
+  let data: unknown;
   try {
-    return JSON.parse(content);
+    data = JSON.parse(content);
   } catch (error) {
     throw new CoverageParseError(
-      `Coverage file contains invalid JSON: ${input}`,
-      input,
+      `Coverage file contains invalid JSON: ${filePath}`,
+      filePath,
       { cause: error },
     );
   }
+
+  return parseCoverage(data as object, options);
 }
+
+// ── Internal Helpers ──────────────────────────────────────────────
 
 function detectAndValidateFormat(data: unknown): UserFormat {
   const format = detectCoverageFormat(data);

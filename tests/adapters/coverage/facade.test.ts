@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { writeFileSync, mkdirSync, rmSync, readFileSync } from "node:fs";
 import {
   parseCoverage,
+  parseCoverageFile,
   createAutoDetectCoveragePort,
   CoverageParseError,
   UnsupportedFormatError,
@@ -28,16 +29,16 @@ afterAll(() => {
   rmSync(TMP_DIR, { recursive: true, force: true });
 });
 
-describe("parseCoverage", () => {
-  // --- File path input ---
+// ── parseCoverage (sync, data-only) ──────────────────────────────
 
-  it("parses Istanbul coverage from a file path", () => {
-    const filePath = join(FIXTURES_DIR, "istanbul-coverage.json");
-    const result = parseCoverage(filePath);
+describe("parseCoverage", () => {
+  // --- Data input ---
+
+  it("parses Istanbul coverage from a data object", () => {
+    const result = parseCoverage(istanbulData);
 
     expect(result.coverage).toBeInstanceOf(Map);
     expect(result.coverage.size).toBeGreaterThan(0);
-    // Verify function entries are actually populated, not empty arrays
     for (const [, functions] of result.coverage) {
       expect(functions.length).toBeGreaterThan(0);
       expect(functions[0]).toHaveProperty("filePath");
@@ -46,24 +47,7 @@ describe("parseCoverage", () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it("parses V8 coverage from a file path", () => {
-    const filePath = join(FIXTURES_DIR, "v8-coverage.json");
-    const result = parseCoverage(filePath);
-
-    expect(result.coverage).toBeInstanceOf(Map);
-    expect(result.coverage.size).toBeGreaterThan(0);
-  });
-
-  // --- Pre-loaded data input ---
-
-  it("parses Istanbul coverage from a pre-loaded object", () => {
-    const result = parseCoverage(istanbulData);
-
-    expect(result.coverage).toBeInstanceOf(Map);
-    expect(result.coverage.size).toBeGreaterThan(0);
-  });
-
-  it("parses V8 coverage from a pre-loaded object", () => {
+  it("parses V8 coverage from a data object", () => {
     const result = parseCoverage(v8Data);
 
     expect(result.coverage).toBeInstanceOf(Map);
@@ -74,25 +58,21 @@ describe("parseCoverage", () => {
 
   it("auto-detects format when not specified", () => {
     const result = parseCoverage(istanbulData);
-    // Istanbul data has file paths as keys
     const keys = [...result.coverage.keys()];
     expect(keys.some((k) => k.includes("math.ts"))).toBe(true);
   });
 
   it("explicit format overrides detection", () => {
-    // Force Istanbul parsing on Istanbul data (should work)
     const result = parseCoverage(istanbulData, { format: "istanbul" });
     expect(result.coverage.size).toBeGreaterThan(0);
   });
 
-  // --- Sources option for V8 accuracy ---
+  // --- Sources option ---
 
-  it("V8 coverage with sources option suppresses approximate-span warnings for matched files", () => {
-    // First parse without sources to discover the relative file paths
+  it("V8 coverage with sources suppresses approximate-span warnings", () => {
     const initial = parseCoverage(v8Data);
     const fileKeys = [...initial.coverage.keys()];
 
-    // Build sources map with matching keys and content long enough to cover the byte offsets
     const sources = new Map<string, string>();
     const dummySource = Array.from({ length: 500 }, (_, i) =>
       `line ${i + 1}: ${"x".repeat(40)}`,
@@ -102,8 +82,6 @@ describe("parseCoverage", () => {
     }
 
     const result = parseCoverage(v8Data, { sources });
-
-    // With sources provided for all files, approximate-span warnings should be gone
     const approxWarnings = result.warnings.filter(
       (w) => w.code === "approximate-span",
     );
@@ -112,27 +90,35 @@ describe("parseCoverage", () => {
 
   it("V8 coverage without sources emits approximate-span warning", () => {
     const result = parseCoverage(v8Data);
-
     const approxWarnings = result.warnings.filter(
       (w) => w.code === "approximate-span",
     );
     expect(approxWarnings.length).toBeGreaterThan(0);
   });
 
-  // --- Warnings always returned ---
+  // --- cwd option ---
+
+  it("cwd option uses deterministic path resolution", () => {
+    // Istanbul fixture has absolute paths like /projects/my-app/src/math.ts
+    const result = parseCoverage(istanbulData, { cwd: "/projects/my-app" });
+    const keys = [...result.coverage.keys()];
+    // Paths should be relative to the cwd
+    expect(keys.some((k) => k === "src/math.ts")).toBe(true);
+  });
+
+  // --- Warnings ---
 
   it("passes through warnings from the coverage adapter", () => {
-    // V8 without sources always emits approximate-span warnings
     const result = parseCoverage(v8Data);
     expect(result.warnings.length).toBeGreaterThan(0);
   });
 
-  // --- Error handling ---
+  // --- Error handling (sync) ---
 
   it("throws UnsupportedFormatError for unknown format", () => {
-    const unknownData = { someRandomKey: 42 };
-
-    expect(() => parseCoverage(unknownData)).toThrow(UnsupportedFormatError);
+    expect(() => parseCoverage({ someRandomKey: 42 })).toThrow(
+      UnsupportedFormatError,
+    );
   });
 
   it("UnsupportedFormatError message explains expected formats", () => {
@@ -146,10 +132,68 @@ describe("parseCoverage", () => {
     }
   });
 
-  it("throws CoverageParseError for non-existent file with descriptive message", () => {
+  it("throws CoverageParseError for format mismatch with cause", () => {
+    try {
+      parseCoverage(istanbulData, { format: "v8" });
+      expect.fail("Should have thrown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(CoverageParseError);
+      expect((error as CoverageParseError).name).toBe("CoverageParseError");
+      expect((error as CoverageParseError).message).toContain("Failed to parse");
+      expect((error as CoverageParseError).cause).toBeDefined();
+    }
+  });
+
+  // --- Edge cases ---
+
+  it("empty Istanbul coverage data returns empty map", () => {
+    const emptyData = {};
+    const result = parseCoverage(emptyData, { format: "istanbul" });
+    expect(result.coverage.size).toBe(0);
+    expect(result.warnings).toEqual([]);
+  });
+});
+
+// ── parseCoverageFile (async, file path) ─────────────────────────
+
+describe("parseCoverageFile", () => {
+  it("parses Istanbul coverage from a file path", async () => {
+    const filePath = join(FIXTURES_DIR, "istanbul-coverage.json");
+    const result = await parseCoverageFile(filePath);
+
+    expect(result.coverage).toBeInstanceOf(Map);
+    expect(result.coverage.size).toBeGreaterThan(0);
+    for (const [, functions] of result.coverage) {
+      expect(functions.length).toBeGreaterThan(0);
+      expect(functions[0]).toHaveProperty("filePath");
+      expect(functions[0]).toHaveProperty("lineCoverage");
+    }
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("parses V8 coverage from a file path", async () => {
+    const filePath = join(FIXTURES_DIR, "v8-coverage.json");
+    const result = await parseCoverageFile(filePath);
+
+    expect(result.coverage).toBeInstanceOf(Map);
+    expect(result.coverage.size).toBeGreaterThan(0);
+  });
+
+  it("delegates to sync parseCoverage — results match", async () => {
+    const filePath = join(FIXTURES_DIR, "istanbul-coverage.json");
+    const asyncResult = await parseCoverageFile(filePath);
+    const syncResult = parseCoverage(istanbulData);
+
+    expect([...asyncResult.coverage.keys()]).toEqual([...syncResult.coverage.keys()]);
+    expect(asyncResult.warnings).toEqual(syncResult.warnings);
+  });
+
+  // --- Error handling (async) ---
+
+  it("throws CoverageParseError for non-existent file", async () => {
     const badPath = "/nonexistent/path/coverage.json";
     try {
-      parseCoverage(badPath);
+      await parseCoverageFile(badPath);
       expect.fail("Should have thrown");
     } catch (error) {
       expect(error).toBeInstanceOf(CoverageParseError);
@@ -161,33 +205,19 @@ describe("parseCoverage", () => {
     }
   });
 
-  it("throws CoverageParseError for invalid JSON file with distinct message", () => {
+  it("throws CoverageParseError for invalid JSON file", async () => {
     const badFile = join(TMP_DIR, "bad.json");
     writeFileSync(badFile, "not valid json {{{");
 
     try {
-      parseCoverage(badFile);
+      await parseCoverageFile(badFile);
       expect.fail("Should have thrown");
     } catch (error) {
       expect(error).toBeInstanceOf(CoverageParseError);
       expect((error as CoverageParseError).name).toBe("CoverageParseError");
-      // Must say "invalid JSON", not "Failed to read" — these are distinct failures
       expect((error as CoverageParseError).message).toContain("invalid JSON");
       expect((error as CoverageParseError).message).toContain(badFile);
       expect((error as CoverageParseError).filePath).toBe(badFile);
-      expect((error as CoverageParseError).cause).toBeDefined();
-    }
-  });
-
-  it("throws CoverageParseError for format mismatch with cause", () => {
-    // Pass Istanbul data but force V8 format — V8 parser should fail
-    try {
-      parseCoverage(istanbulData, { format: "v8" });
-      expect.fail("Should have thrown");
-    } catch (error) {
-      expect(error).toBeInstanceOf(CoverageParseError);
-      expect((error as CoverageParseError).name).toBe("CoverageParseError");
-      expect((error as CoverageParseError).message).toContain("Failed to parse");
       expect((error as CoverageParseError).cause).toBeDefined();
     }
   });
@@ -202,13 +232,11 @@ describe("createAutoDetectCoveragePort", () => {
     const port = createAutoDetectCoveragePort();
     expect(port).toBeDefined();
     expect(typeof port.parse).toBe("function");
-    // Satisfies CoveragePort interface
     const typed: CoveragePort = port;
     expect(typed).toBe(port);
   });
 
   it("accepts cwd parameter for path resolution", () => {
-    // Factory with cwd should create adapters that resolve paths relative to cwd
     const port = createAutoDetectCoveragePort("/some/project");
     expect(port).toBeDefined();
     expect(typeof port.parse).toBe("function");
@@ -222,7 +250,6 @@ describe("createAutoDetectCoveragePort", () => {
 
     expect(result.coverage).toBeInstanceOf(Map);
     expect(result.coverage.size).toBeGreaterThan(0);
-    // Istanbul data has file paths as keys
     const keys = [...result.coverage.keys()];
     expect(keys.some((k) => k.includes("math.ts"))).toBe(true);
   });
@@ -237,7 +264,6 @@ describe("createAutoDetectCoveragePort", () => {
 
   it("throws UnsupportedFormatError for unknown data", () => {
     const port = createAutoDetectCoveragePort();
-
     expect(() => port.parse({ someRandomKey: 42 })).toThrow(
       UnsupportedFormatError,
     );
@@ -248,14 +274,12 @@ describe("createAutoDetectCoveragePort", () => {
   it("forwards sources to V8 adapter", () => {
     const port = createAutoDetectCoveragePort();
 
-    // Parse without sources — expect approximate-span warnings
     const withoutSources = port.parse(v8Data);
     const approxWithout = withoutSources.warnings.filter(
       (w) => w.code === "approximate-span",
     );
     expect(approxWithout.length).toBeGreaterThan(0);
 
-    // Build sources map to suppress warnings
     const fileKeys = [...withoutSources.coverage.keys()];
     const sources = new Map<string, string>();
     const dummySource = Array.from({ length: 500 }, (_, i) =>
@@ -265,7 +289,6 @@ describe("createAutoDetectCoveragePort", () => {
       sources.set(key, dummySource);
     }
 
-    // Parse with sources — approximate-span warnings should be suppressed
     const withSources = port.parse(v8Data, sources);
     const approxWith = withSources.warnings.filter(
       (w) => w.code === "approximate-span",
@@ -277,7 +300,6 @@ describe("createAutoDetectCoveragePort", () => {
     const port = createAutoDetectCoveragePort();
     const sources = new Map<string, string>([["test.ts", "const x = 1;"]]);
 
-    // Istanbul currently ignores sources but should accept the parameter
     const result = port.parse(istanbulData, sources);
     expect(result.coverage).toBeInstanceOf(Map);
     expect(result.coverage.size).toBeGreaterThan(0);
