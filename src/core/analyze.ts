@@ -15,6 +15,7 @@ import type {
   FunctionComplexity,
   FunctionCoverage,
   FunctionFilter,
+  MatchResult,
   ThresholdConfig,
   ScoredFunction,
 } from "../domain/types.js";
@@ -72,82 +73,15 @@ export async function analyze(
   // 7. Match complexity with coverage
   const matchResult = resolvedDeps.matcher(complexitiesToMatch, allCoverages);
 
-  // 8. Score each matched pair and create verdicts
-  const allVerdicts: FunctionVerdict[] = [];
-  const allUnmatched: UnmatchedFunction[] = [];
+  // 8. Score matched pairs and collect unmatched
+  const allVerdicts = scoreMatchedPairs(matchResult.matched, opts.coverageMetric, thresholdConfig, resolvedDeps.globMatcher);
+  const allUnmatched = collectUnmatched(matchResult);
 
-  for (const { complexity, coverage } of matchResult.matched) {
-    const coveragePercent = extractCoveragePercent(coverage, opts.coverageMetric);
-    const crap = computeCrap(complexity.cyclomaticComplexity, coveragePercent);
-    const threshold = resolveThreshold(
-      thresholdConfig,
-      complexity.identity.filePath,
-      resolvedDeps.globMatcher,
-    );
+  // 9. Collect warnings
+  const warnings = collectWarnings(coverageWarnings, allUnmatched, opts.filter, complexitiesToMatch.length, allComplexities.length);
 
-    const scored: ScoredFunction = {
-      identity: complexity.identity,
-      cyclomaticComplexity: complexity.cyclomaticComplexity,
-      coveragePercent,
-      crap,
-    };
-
-    allVerdicts.push({
-      scored,
-      threshold,
-      exceeds: crap.value > threshold,
-    });
-  }
-
-  // 9. Handle unmatched complexity (no-coverage: worst-case 0%)
-  for (const complexity of matchResult.unmatchedComplexity) {
-    const worstCaseCrap = computeCrap(complexity.cyclomaticComplexity, 0);
-    allUnmatched.push({
-      kind: "no-coverage",
-      complexity,
-      worstCaseCrap,
-    });
-  }
-
-  // 10. Handle unmatched coverage (no-ast: informational)
-  for (const coverage of matchResult.unmatchedCoverage) {
-    allUnmatched.push({
-      kind: "no-ast",
-      coverage,
-    });
-  }
-
-  // 11. Collect warnings from coverage parsing, unmatched, and filter
-  const warnings: Warning[] = [...coverageWarnings];
-
-  if (opts.filter && complexitiesToMatch.length === 0 && allComplexities.length > 0) {
-    warnings.push({
-      code: "filter-excluded-all",
-      message: `Filter "${opts.filter.description}" excluded all ${allComplexities.length} functions. No functions overlap with changed lines.`,
-    });
-  }
-  for (const u of allUnmatched) {
-    if (u.kind === "no-coverage") {
-      warnings.push({
-        code: "unmatched-no-coverage",
-        message: `No coverage data found for function "${u.complexity.identity.qualifiedName}"`,
-        file: u.complexity.identity.filePath,
-        function: u.complexity.identity.qualifiedName,
-      });
-    } else {
-      warnings.push({
-        code: "unmatched-no-ast",
-        message: `No AST match found for coverage entry "${u.coverage.name}"`,
-        file: u.coverage.filePath,
-        function: u.coverage.name,
-      });
-    }
-  }
-
-  // 12. Compute overall summary
+  // 10. Compute summary and pass/fail
   const summary = computeSummary(allVerdicts);
-
-  // 13. Determine pass/fail
   const passed = allVerdicts.every((v) => !v.exceeds);
 
   return { functions: allVerdicts, unmatched: allUnmatched, warnings, summary, thresholdConfig, passed };
@@ -247,6 +181,78 @@ export function extractCoveragePercent(
       : 100; // A function with no branches has trivially 100% branch coverage
   }
   return coverage.lineCoverage.percent;
+}
+
+function scoreMatchedPairs(
+  matched: MatchResult["matched"],
+  coverageMetric: "line" | "branch",
+  thresholdConfig: ThresholdConfig,
+  globMatcher: (path: string, pattern: string) => boolean,
+): FunctionVerdict[] {
+  return matched.map(({ complexity, coverage }) => {
+    const coveragePercent = extractCoveragePercent(coverage, coverageMetric);
+    const crap = computeCrap(complexity.cyclomaticComplexity, coveragePercent);
+    const threshold = resolveThreshold(thresholdConfig, complexity.identity.filePath, globMatcher);
+    const scored: ScoredFunction = {
+      identity: complexity.identity,
+      cyclomaticComplexity: complexity.cyclomaticComplexity,
+      coveragePercent,
+      crap,
+    };
+    return { scored, threshold, exceeds: crap.value > threshold };
+  });
+}
+
+function collectUnmatched(matchResult: MatchResult): UnmatchedFunction[] {
+  const unmatched: UnmatchedFunction[] = [];
+  for (const complexity of matchResult.unmatchedComplexity) {
+    unmatched.push({
+      kind: "no-coverage",
+      complexity,
+      worstCaseCrap: computeCrap(complexity.cyclomaticComplexity, 0),
+    });
+  }
+  for (const coverage of matchResult.unmatchedCoverage) {
+    unmatched.push({ kind: "no-ast", coverage });
+  }
+  return unmatched;
+}
+
+function collectWarnings(
+  coverageWarnings: Warning[],
+  unmatched: ReadonlyArray<UnmatchedFunction>,
+  filter: FunctionFilter | undefined,
+  filteredCount: number,
+  totalCount: number,
+): Warning[] {
+  const warnings: Warning[] = [...coverageWarnings];
+
+  if (filter && filteredCount === 0 && totalCount > 0) {
+    warnings.push({
+      code: "filter-excluded-all",
+      message: `Filter "${filter.description}" excluded all ${totalCount} functions. No functions overlap with changed lines.`,
+    });
+  }
+
+  for (const u of unmatched) {
+    if (u.kind === "no-coverage") {
+      warnings.push({
+        code: "unmatched-no-coverage",
+        message: `No coverage data found for function "${u.complexity.identity.qualifiedName}"`,
+        file: u.complexity.identity.filePath,
+        function: u.complexity.identity.qualifiedName,
+      });
+    } else {
+      warnings.push({
+        code: "unmatched-no-ast",
+        message: `No AST match found for coverage entry "${u.coverage.name}"`,
+        file: u.coverage.filePath,
+        function: u.coverage.name,
+      });
+    }
+  }
+
+  return warnings;
 }
 
 function emptyResult(thresholdConfig: ThresholdConfig): AnalysisResult {

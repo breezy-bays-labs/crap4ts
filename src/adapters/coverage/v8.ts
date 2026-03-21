@@ -177,23 +177,7 @@ export class V8CoverageAdapter implements CoveragePort {
     data: unknown,
     sources?: ReadonlyMap<string, string>,
   ): CoverageParseResult {
-    if (data === null || typeof data !== "object" || Array.isArray(data)) {
-      throw new Error(
-        "Invalid V8 coverage data: expected an object with a 'result' array",
-      );
-    }
-
-    const v8Data = data as Record<string, unknown>;
-
-    if (!Array.isArray(v8Data.result)) {
-      throw new Error(
-        "Invalid V8 coverage data: expected an object with a 'result' array",
-      );
-    }
-
-    const scripts = (v8Data.result as V8ScriptCoverage[]).filter(
-      (s) => s && typeof s === "object" && typeof s.url === "string" && Array.isArray(s.functions),
-    );
+    const scripts = this.validateAndExtractScripts(data);
 
     // Resolve absolute paths from URLs
     const absolutePaths = scripts.map((s) => stripFileProtocol(s.url));
@@ -209,52 +193,73 @@ export class V8CoverageAdapter implements CoveragePort {
 
     for (let i = 0; i < scripts.length; i++) {
       const script = scripts[i]!;
-      const absolutePath = absolutePaths[i]!;
-      const relativePath = normalizePath(absolutePath, prefix);
-      const functions: FunctionCoverage[] = [];
-
-      // Try to get source content for accurate line mapping (Tier 2)
-      const sourceContent = sources?.get(relativePath) ?? null;
-      const lineTable = sourceContent
-        ? buildLineOffsetTable(sourceContent)
-        : null;
-
-      // Emit warning if falling back to approximation
-      if (!lineTable && !warnedFiles.has(relativePath)) {
-        const hasFunctions = script.functions.some((fn) => fn.functionName && fn.ranges.length > 0);
-        if (hasFunctions) {
-          warnings.push({
-            code: "approximate-span",
-            message: `Source content unavailable for "${relativePath}" — using approximate byte-to-line conversion`,
-            file: relativePath,
-          });
-          warnedFiles.add(relativePath);
-        }
-      }
-
-      for (const fn of script.functions) {
-        // Skip anonymous functions (empty name)
-        if (!fn.functionName) continue;
-
-        // Skip functions with no ranges
-        if (fn.ranges.length === 0) continue;
-
-        const outerRange = fn.ranges[0]!;
-        const span = computeSpan(outerRange, lineTable);
-        const lineCoverage = computeByteCoverage(fn.ranges);
-
-        functions.push({
-          filePath: relativePath,
-          name: fn.functionName,
-          span,
-          lineCoverage,
-          branchCoverage: null, // Raw V8 coverage lacks branch semantics
-        });
-      }
-
+      const relativePath = normalizePath(absolutePaths[i]!, prefix);
+      const { functions, warning } = this.processScript(script, relativePath, sources, warnedFiles);
       result.set(relativePath, functions);
+      if (warning) warnings.push(warning);
     }
 
     return { coverage: result, warnings };
+  }
+
+  private validateAndExtractScripts(data: unknown): V8ScriptCoverage[] {
+    if (data === null || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error(
+        "Invalid V8 coverage data: expected an object with a 'result' array",
+      );
+    }
+
+    const v8Data = data as Record<string, unknown>;
+
+    if (!Array.isArray(v8Data.result)) {
+      throw new Error(
+        "Invalid V8 coverage data: expected an object with a 'result' array",
+      );
+    }
+
+    return (v8Data.result as V8ScriptCoverage[]).filter(
+      (s) => s && typeof s === "object" && typeof s.url === "string" && Array.isArray(s.functions),
+    );
+  }
+
+  private processScript(
+    script: V8ScriptCoverage,
+    relativePath: string,
+    sources: ReadonlyMap<string, string> | undefined,
+    warnedFiles: Set<string>,
+  ): { functions: FunctionCoverage[]; warning: Warning | null } {
+    const sourceContent = sources?.get(relativePath) ?? null;
+    const lineTable = sourceContent
+      ? buildLineOffsetTable(sourceContent)
+      : null;
+
+    let warning: Warning | null = null;
+    if (!lineTable && !warnedFiles.has(relativePath)) {
+      const hasFunctions = script.functions.some((fn) => fn.functionName && fn.ranges.length > 0);
+      if (hasFunctions) {
+        warning = {
+          code: "approximate-span",
+          message: `Source content unavailable for "${relativePath}" — using approximate byte-to-line conversion`,
+          file: relativePath,
+        };
+        warnedFiles.add(relativePath);
+      }
+    }
+
+    const functions: FunctionCoverage[] = [];
+    for (const fn of script.functions) {
+      if (!fn.functionName || fn.ranges.length === 0) continue;
+
+      const outerRange = fn.ranges[0]!;
+      functions.push({
+        filePath: relativePath,
+        name: fn.functionName,
+        span: computeSpan(outerRange, lineTable),
+        lineCoverage: computeByteCoverage(fn.ranges),
+        branchCoverage: null,
+      });
+    }
+
+    return { functions, warning };
   }
 }
