@@ -256,10 +256,10 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
       }
     } else if (node.type === "LogicalExpression") {
       scope.complexity++;
-      this.addLogicalContributor(node as TSESTree.LogicalExpression, scope);
+      this.addContributor(node, "logical-operator", scope, (node as TSESTree.LogicalExpression).operator);
     } else if (node.type === "ChainExpression") {
       scope.complexity++;
-      this.addChainContributor(node as TSESTree.ChainExpression, scope);
+      this.addContributor(node, "optional-chain", scope, "?.");
     } else if (DECISION_TYPES.has(node.type)) {
       scope.complexity++;
       const kind = NODE_TO_KIND[node.type];
@@ -297,39 +297,14 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
     node: TSESTree.Node,
     kind: ContributorKind,
     scope: FunctionScope,
+    operator?: string,
   ): void {
     const loc = node.loc!;
-    scope.contributors.push({
-      kind,
-      line: loc.start.line,
-      column: loc.start.column,
-    });
-  }
-
-  private addLogicalContributor(
-    node: TSESTree.LogicalExpression,
-    scope: FunctionScope,
-  ): void {
-    const loc = node.loc!;
-    scope.contributors.push({
-      kind: "logical-operator",
-      line: loc.start.line,
-      column: loc.start.column,
-      operator: node.operator,
-    });
-  }
-
-  private addChainContributor(
-    node: TSESTree.ChainExpression,
-    scope: FunctionScope,
-  ): void {
-    const loc = node.loc!;
-    scope.contributors.push({
-      kind: "optional-chain",
-      line: loc.start.line,
-      column: loc.start.column,
-      operator: "?.",
-    });
+    scope.contributors.push(
+      operator
+        ? { kind, line: loc.start.line, column: loc.start.column, operator }
+        : { kind, line: loc.start.line, column: loc.start.column },
+    );
   }
 
   private toFunctionComplexity(
