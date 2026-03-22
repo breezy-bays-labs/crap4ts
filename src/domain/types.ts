@@ -202,7 +202,6 @@ export interface AnalyzeOptions {
   exclude?: string[];
   filter?: FunctionFilter;
   cwd?: string;
-  signal?: AbortSignal;
 }
 
 // ── Custom Errors ───────────────────────────────────────────────────

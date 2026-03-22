@@ -6,7 +6,6 @@ export { defineConfig } from "./define-config.js";
 export type { Crap4tsConfig } from "./define-config.js";
 export { createDefaultDeps } from "./defaults.js";
 
-// Re-export commonly-used domain types for library consumers
 export type {
   AnalyzeOptions,
   AnalysisResult,
@@ -19,6 +18,7 @@ export type {
   SourceSpan,
   ThresholdConfig,
   ThresholdOverride,
+  ThresholdPreset,
   CoverageRatio,
   FunctionComplexity,
   FunctionCoverage,
@@ -29,7 +29,15 @@ export type {
   ContributorKind,
   ComplexityContributor,
   BreakdownMode,
+  MatchResult,
+  MatchFunctions,
 } from "../domain/types.js";
 export { RiskLevel } from "../domain/types.js";
 export { selectContributors } from "../domain/contributors.js";
 export { prepareForJsonOutput } from "./prepare-output.js";
+
+export type { GlobMatcher, ThresholdOptions } from "../domain/threshold.js";
+export { PRESETS, createThresholdConfig, resolveThreshold } from "../domain/threshold.js";
+
+export type { ComplexityPort } from "../ports/complexity-port.js";
+export type { CoveragePort, CoverageParseResult } from "../ports/coverage-port.js";

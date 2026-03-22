@@ -125,7 +125,7 @@ describe("output formats", () => {
 
   it("--version shows the correct version string", async () => {
     const { stdout } = await runCli(["--version"]);
-    expect(stdout.trim()).toBe("0.2.0");
+    expect(stdout.trim()).toBe("0.3.0");
   });
 
   it("markdown output contains content", async () => {

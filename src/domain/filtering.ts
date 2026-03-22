@@ -1,11 +1,5 @@
-import type { SourceSpan, FunctionFilter, FunctionIdentity } from "./types.js";
-
-/**
- * Returns true if two half-open spans [startLine, endLine) share any lines.
- */
-export function spansOverlap(a: SourceSpan, b: SourceSpan): boolean {
-  return a.startLine < b.endLine && b.startLine < a.endLine;
-}
+import type { FunctionFilter, FunctionIdentity } from "./types.js";
+import { spansOverlap } from "./matching.js";
 
 /**
  * Returns true if a function should be included based on the filter.

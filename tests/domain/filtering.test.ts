@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { spansOverlap, shouldInclude } from "../../src/domain/filtering.js";
+import { shouldInclude } from "../../src/domain/filtering.js";
 import type {
   SourceSpan,
   FunctionFilter,
@@ -24,32 +24,6 @@ function filter(
     changedFiles: new Map(entries),
   };
 }
-
-// ── spansOverlap ─────────────────────────────────────────────────────
-
-describe("spansOverlap", () => {
-  it("returns true when spans share lines", () => {
-    expect(spansOverlap(span(5, 15), span(10, 20))).toBe(true);
-  });
-
-  it("returns false when spans are separated", () => {
-    expect(spansOverlap(span(5, 10), span(15, 20))).toBe(false);
-  });
-
-  it("returns false for adjacent spans under half-open convention", () => {
-    // [5, 10) and [10, 15) — endLine 10 is exclusive, so no overlap
-    expect(spansOverlap(span(5, 10), span(10, 15))).toBe(false);
-  });
-
-  it("returns false for reverse-adjacent spans under half-open convention", () => {
-    // [10, 15) and [5, 10) — tests the other boundary direction
-    expect(spansOverlap(span(10, 15), span(5, 10))).toBe(false);
-  });
-
-  it("returns true for single-line change inside a function", () => {
-    expect(spansOverlap(span(1, 50), span(25, 26))).toBe(true);
-  });
-});
 
 // ── shouldInclude ────────────────────────────────────────────────────
 
