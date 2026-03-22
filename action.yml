@@ -8,9 +8,9 @@ branding:
 
 inputs:
   threshold:
-    description: 'CRAP score threshold (default: 30 for gradual adoption)'
+    description: 'CRAP score threshold (default: 16, use 30 for lenient adoption)'
     required: false
-    default: '30'
+    default: '16'
   coverage-path:
     description: 'Path to coverage JSON. Omit to let CLI auto-discover.'
     required: false
