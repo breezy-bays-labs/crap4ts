@@ -33,7 +33,7 @@ export interface AnalyzeFileResult {
  * - Reads the file and extracts cyclomatic complexity via the complexity adapter.
  * - If a `coverage` path is provided, parses it and matches functions.
  * - If no coverage data is available, scores every function at 0% (worst case).
- * - Applies the optional `threshold` (defaults to 12).
+ * - Applies the optional `threshold` (defaults to PRESETS.default).
  */
 export async function analyzeFile(
   filePath: string,
