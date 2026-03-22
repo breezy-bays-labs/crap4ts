@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, basename } from "node:path";
 import { defineConfig, type Crap4tsConfig } from "../core/define-config.js";
 import { createThresholdConfig } from "../domain/threshold.js";
-import type { ThresholdConfig } from "../domain/types.js";
+import type { BreakdownMode, ThresholdConfig } from "../domain/types.js";
 
 // ── Config File Names (discovery order) ──────────────────────────────
 
@@ -140,13 +140,17 @@ function createDefaultImport(): (path: string) => Promise<Record<string, unknown
 export interface ResolvedConfig {
   threshold?: number;
   coverage?: string;
-  format?: string;
+  format?: "table" | "json" | "markdown";
   noColor: boolean;
   coverageMetric?: "line" | "branch";
   include?: string[];
   exclude?: string[];
   thresholds?: Record<string, number>;
   src?: string | string[];
+  breakdown?: BreakdownMode;
+  sort?: "crap" | "complexity" | "coverage" | "name";
+  top?: number;
+  summary?: boolean;
 }
 
 export interface ResolveConfigOptions {
@@ -155,12 +159,16 @@ export interface ResolveConfigOptions {
   cliFlags?: Partial<{
     threshold: number;
     coverage: string;
-    format: string;
+    format: "table" | "json" | "markdown";
     noColor: boolean;
     coverageMetric: "line" | "branch";
     include: string[];
     exclude: string[];
     src: string | string[];
+    breakdown: BreakdownMode;
+    sort: "crap" | "complexity" | "coverage" | "name";
+    top: number;
+    summary: boolean;
   }>;
 }
 
@@ -180,25 +188,31 @@ export function resolveConfig(options: ResolveConfigOptions): ResolvedConfig {
   return {
     // Threshold: CLI > env > file
     threshold: cli.threshold ?? env.threshold ?? file.threshold,
-    // Coverage path: CLI > env > file (file doesn't have coverage path)
+    // Coverage path: CLI > env (runtime-only, not in config file)
     coverage: cli.coverage ?? env.coverage,
-    // Format: CLI > env
-    format: cli.format ?? env.format,
+    // Format: CLI > env > file
+    format: cli.format ?? env.format ?? file.format,
     // NO_COLOR: CLI > env
     noColor: cli.noColor ?? env.noColor ?? false,
-    // File-only fields (no env var equivalent)
+    // CLI > file fields
     coverageMetric: cli.coverageMetric ?? file.coverageMetric,
     include: cli.include ?? file.include,
     exclude: cli.exclude ?? file.exclude,
     thresholds: file.thresholds,
-    src: cli.src,
+    src: cli.src ?? file.src,
+    breakdown: cli.breakdown ?? file.breakdown,
+    sort: cli.sort ?? file.sort,
+    top: cli.top ?? file.top,
+    summary: cli.summary ?? file.summary,
   };
 }
+
+type FormatType = "table" | "json" | "markdown";
 
 interface ParsedEnv {
   threshold?: number;
   coverage?: string;
-  format?: string;
+  format?: FormatType;
   noColor: boolean;
 }
 
@@ -213,7 +227,11 @@ function parseEnvVars(env: Record<string, string | undefined>): ParsedEnv {
   }
 
   const coverage = env["CRAP4TS_COVERAGE"] || undefined;
-  const format = env["CRAP4TS_FORMAT"] || undefined;
+  const rawFormat = env["CRAP4TS_FORMAT"] || undefined;
+  const validFormats: FormatType[] = ["table", "json", "markdown"];
+  const format = rawFormat && validFormats.includes(rawFormat as FormatType)
+    ? (rawFormat as FormatType)
+    : undefined;
   const noColor = Boolean(env["NO_COLOR"]);
 
   return { threshold, coverage, format, noColor };

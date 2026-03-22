@@ -281,6 +281,90 @@ describe("resolveConfig — priority cascade", () => {
   });
 });
 
+// ── resolveConfig — new config file fields ──────────────────────────
+
+describe("resolveConfig — new config file fields", () => {
+  it("file config sets format, flows through to resolved", () => {
+    const config = resolveConfig({
+      fileConfig: { format: "json" },
+    });
+    expect(config.format).toBe("json");
+  });
+
+  it("CLI format overrides file config format", () => {
+    const config = resolveConfig({
+      fileConfig: { format: "json" },
+      cliFlags: { format: "markdown" },
+    });
+    expect(config.format).toBe("markdown");
+  });
+
+  it("env format overrides file config format", () => {
+    const config = resolveConfig({
+      fileConfig: { format: "json" },
+      env: { CRAP4TS_FORMAT: "markdown" },
+    });
+    expect(config.format).toBe("markdown");
+  });
+
+  it("file config sets src, flows through to resolved", () => {
+    const config = resolveConfig({
+      fileConfig: { src: ["src", "lib"] },
+    });
+    expect(config.src).toEqual(["src", "lib"]);
+  });
+
+  it("CLI src overrides file config src", () => {
+    const config = resolveConfig({
+      fileConfig: { src: ["src"] },
+      cliFlags: { src: ["lib"] },
+    });
+    expect(config.src).toEqual(["lib"]);
+  });
+
+  it("file config sets breakdown, flows through to resolved", () => {
+    const config = resolveConfig({
+      fileConfig: { breakdown: "all" },
+    });
+    expect(config.breakdown).toBe("all");
+  });
+
+  it("CLI breakdown overrides file config breakdown", () => {
+    const config = resolveConfig({
+      fileConfig: { breakdown: "all" },
+      cliFlags: { breakdown: "exceeding" },
+    });
+    expect(config.breakdown).toBe("exceeding");
+  });
+
+  it("file config sets sort, top, summary — all flow through", () => {
+    const config = resolveConfig({
+      fileConfig: { sort: "complexity", top: 5, summary: true },
+    });
+    expect(config.sort).toBe("complexity");
+    expect(config.top).toBe(5);
+    expect(config.summary).toBe(true);
+  });
+
+  it("CLI sort, top, summary override file config", () => {
+    const config = resolveConfig({
+      fileConfig: { sort: "complexity", top: 5, summary: true },
+      cliFlags: { sort: "name", top: 20, summary: false },
+    });
+    expect(config.sort).toBe("name");
+    expect(config.top).toBe(20);
+    expect(config.summary).toBe(false);
+  });
+
+  it("file config fields don't appear when not set", () => {
+    const config = resolveConfig({});
+    expect(config.breakdown).toBeUndefined();
+    expect(config.sort).toBeUndefined();
+    expect(config.top).toBeUndefined();
+    expect(config.summary).toBeUndefined();
+  });
+});
+
 // ── configToThresholdConfig ──────────────────────────────────────────
 
 describe("configToThresholdConfig", () => {

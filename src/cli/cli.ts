@@ -100,6 +100,12 @@ export default defineConfig({
   threshold: 12,
   coverageMetric: "line",
   exclude: ["**/*.test.*", "**/*.spec.*", "**/*.d.ts"],
+  // format: "table",
+  // src: ["src"],
+  // breakdown: "off",
+  // sort: "crap",
+  // top: 10,
+  // summary: false,
 });
 `;
 
@@ -165,12 +171,16 @@ program.action(async (opts: Record<string, unknown>) => {
       cliFlags: {
         threshold,
         coverage: opts["coverage"] as string | undefined,
-        format: opts["format"] as string | undefined,
+        format: opts["format"] as ResolvedConfig["format"],
         noColor: opts["color"] === false ? true : undefined, // only set when --no-color is explicit
         coverageMetric,
         include: opts["include"] as string[] | undefined,
         exclude: opts["exclude"] as string[] | undefined,
         src: opts["src"] as string[] | undefined,
+        breakdown: parseBreakdownCliFlag(opts["breakdown"]),
+        sort: opts["sort"] as ResolvedConfig["sort"],
+        top: opts["top"] as number | undefined,
+        summary: opts["summary"] === true ? true : undefined,
       },
     });
 
@@ -233,7 +243,7 @@ program.action(async (opts: Record<string, unknown>) => {
     }
 
     // 8b. Resolve breakdown mode
-    const breakdown = resolveBreakdownFlag(opts);
+    const breakdown = resolved.breakdown ?? "off";
     const format = resolved.format ?? "table";
     if (breakdown !== "off" && format !== "json") {
       console.error(
@@ -247,13 +257,13 @@ program.action(async (opts: Record<string, unknown>) => {
       const reporter = createReporter(resolved);
       let output: string;
 
-      const summaryOnly = Boolean(opts["summary"]);
+      const summaryOnly = resolved.summary ?? false;
       if (summaryOnly) {
         output = formatSummaryLine(result);
       } else {
         // Apply --sort and --top before formatting
-        const sortField = opts["sort"] as string | undefined;
-        const topN = opts["top"] as number | undefined;
+        const sortField = resolved.sort;
+        const topN = resolved.top;
         const filtered = applyFilters(result, sortField, topN);
         // Pre-map contributors for JSON output (reporters are pure serializers)
         const reportable = format === "json"
@@ -328,14 +338,14 @@ function resolveThresholdFlag(
   return opts["threshold"] as number | undefined;
 }
 
-function resolveBreakdownFlag(
-  opts: Record<string, unknown>,
-): BreakdownMode {
-  const raw = opts["breakdown"];
-  if (raw === undefined || raw === false) return "off";
+function parseBreakdownCliFlag(
+  raw: unknown,
+): BreakdownMode | undefined {
+  if (raw === undefined || raw === false) return undefined;
   if (raw === true) return "exceeding"; // --breakdown without value
   if (raw === "all") return "all";
   if (raw === "exceeding") return "exceeding";
+  if (raw === "off") return "off";
   // Invalid value
   console.error(
     `Invalid --breakdown value: "${String(raw)}". Valid values: all, exceeding (or omit for exceeding).`,
