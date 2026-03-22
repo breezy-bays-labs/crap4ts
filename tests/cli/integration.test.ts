@@ -222,6 +222,19 @@ describe("flags", () => {
     const lines = stdout.trim().split("\n");
     expect(lines).toHaveLength(1);
   });
+
+  it("--sort with invalid value produces an error", async () => {
+    const { stderr, exitCode } = await runCli([
+      "--coverage",
+      ISTANBUL_COV,
+      "--src",
+      FIXTURES,
+      "--sort",
+      "nonsense",
+    ]);
+    expect(exitCode).not.toBe(0);
+    expect(stderr).toContain("Invalid --sort value");
+  });
 });
 
 // ── Environment Variables ───────────────────────────────────────────

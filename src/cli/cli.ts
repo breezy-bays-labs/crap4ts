@@ -411,6 +411,11 @@ function sortVerdicts(
         ),
       );
       break;
+    default:
+      console.error(
+        `Invalid --sort value: "${field}". Valid values: crap, complexity, coverage, name.`,
+      );
+      process.exit(EXIT_CONFIG_ERROR);
   }
 
   return sorted;
