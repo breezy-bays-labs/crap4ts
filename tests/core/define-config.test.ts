@@ -73,6 +73,12 @@ describe("defineConfig", () => {
     expect(config.src).toBe("src");
   });
 
+  it("accepts all valid format values", () => {
+    expect(defineConfig({ format: "table" }).format).toBe("table");
+    expect(defineConfig({ format: "json" }).format).toBe("json");
+    expect(defineConfig({ format: "markdown" }).format).toBe("markdown");
+  });
+
   it("rejects invalid format", () => {
     // @ts-expect-error — testing runtime validation
     expect(() => defineConfig({ format: "xml" })).toThrow();
