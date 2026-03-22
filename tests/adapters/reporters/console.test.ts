@@ -44,6 +44,7 @@ function makeVerdict(
       cyclomaticComplexity: cc,
       coveragePercent: covPct,
       crap: makeScore(crapValue),
+      contributors: [],
     },
     threshold,
     exceeds: crapValue > threshold,

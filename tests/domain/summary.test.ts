@@ -11,7 +11,7 @@ function makeVerdict(name: string, crapValue: number, threshold: number): Functi
   };
   const crap: CrapScore = { value: crapValue, riskLevel: classifyRisk(crapValue) };
   return {
-    scored: { identity, cyclomaticComplexity: 1, coveragePercent: 100, crap },
+    scored: { identity, cyclomaticComplexity: 1, coveragePercent: 100, crap, contributors: [] },
     threshold,
     exceeds: crapValue > threshold,
   };
@@ -111,7 +111,7 @@ describe("computeSummary", () => {
       scored: {
         identity: { filePath: "other.ts", qualifiedName: "b", span: { startLine: 1, startColumn: 0, endLine: 10, endColumn: 0 } },
         cyclomaticComplexity: 1, coveragePercent: 100,
-        crap: { value: 3, riskLevel: RiskLevel.Low },
+        crap: { value: 3, riskLevel: RiskLevel.Low }, contributors: [],
       },
       threshold: 12, exceeds: false,
     };

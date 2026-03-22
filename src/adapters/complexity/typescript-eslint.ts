@@ -1,7 +1,12 @@
 import { parse } from "@typescript-eslint/typescript-estree";
 import type { TSESTree } from "@typescript-eslint/typescript-estree";
 import type { ComplexityPort } from "../../ports/complexity-port.js";
-import type { FunctionComplexity, SourceSpan } from "../../domain/types.js";
+import type {
+  FunctionComplexity,
+  SourceSpan,
+  ComplexityContributor,
+  ContributorKind,
+} from "../../domain/types.js";
 
 // AST node types we care about for function scoping
 const FUNCTION_TYPES = new Set([
@@ -35,7 +40,19 @@ interface FunctionScope {
   qualifiedName: string;
   span: SourceSpan;
   complexity: number;
+  contributors: ComplexityContributor[];
 }
+
+const NODE_TO_KIND: Record<string, ContributorKind> = {
+  IfStatement: "if-branch",
+  ConditionalExpression: "ternary",
+  ForStatement: "for-loop",
+  ForInStatement: "for-loop",
+  ForOfStatement: "for-loop",
+  WhileStatement: "while-loop",
+  DoWhileStatement: "do-while-loop",
+  CatchClause: "catch",
+};
 
 export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
   extract(sourceText: string, filePath: string): FunctionComplexity[] {
@@ -207,6 +224,7 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
         endColumn: loc.end.column,
       },
       complexity: 1, // base complexity
+      contributors: [],
     };
   }
 
@@ -229,14 +247,25 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
       return;
     }
 
-    // Count decision points
+    // Count decision points and collect contributors
     if (node.type === "SwitchCase") {
       // Only count non-default cases that have statements (skip empty fall-throughs)
       if (node.test !== null && node.consequent.length > 0) {
         scope.complexity++;
+        this.addContributor(node, "case-branch", scope);
       }
+    } else if (node.type === "LogicalExpression") {
+      scope.complexity++;
+      this.addLogicalContributor(node as TSESTree.LogicalExpression, scope);
+    } else if (node.type === "ChainExpression") {
+      scope.complexity++;
+      this.addChainContributor(node as TSESTree.ChainExpression, scope);
     } else if (DECISION_TYPES.has(node.type)) {
       scope.complexity++;
+      const kind = NODE_TO_KIND[node.type];
+      if (kind) {
+        this.addContributor(node, kind, scope);
+      }
     }
 
     this.traverseChildren(node, scope);
@@ -264,10 +293,53 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
     }
   }
 
+  private addContributor(
+    node: TSESTree.Node,
+    kind: ContributorKind,
+    scope: FunctionScope,
+  ): void {
+    const loc = node.loc!;
+    scope.contributors.push({
+      kind,
+      line: loc.start.line,
+      column: loc.start.column,
+    });
+  }
+
+  private addLogicalContributor(
+    node: TSESTree.LogicalExpression,
+    scope: FunctionScope,
+  ): void {
+    const loc = node.loc!;
+    scope.contributors.push({
+      kind: "logical-operator",
+      line: loc.start.line,
+      column: loc.start.column,
+      operator: node.operator,
+    });
+  }
+
+  private addChainContributor(
+    node: TSESTree.ChainExpression,
+    scope: FunctionScope,
+  ): void {
+    const loc = node.loc!;
+    scope.contributors.push({
+      kind: "optional-chain",
+      line: loc.start.line,
+      column: loc.start.column,
+      operator: "?.",
+    });
+  }
+
   private toFunctionComplexity(
     scope: FunctionScope,
     filePath: string,
   ): FunctionComplexity {
+    // Sort contributors by source position
+    const sorted = [...scope.contributors].sort(
+      (a, b) => a.line - b.line || a.column - b.column,
+    );
     return {
       identity: {
         filePath,
@@ -275,6 +347,7 @@ export class TypeScriptEslintComplexityAdapter implements ComplexityPort {
         span: scope.span,
       },
       cyclomaticComplexity: scope.complexity,
+      contributors: sorted,
     };
   }
 }

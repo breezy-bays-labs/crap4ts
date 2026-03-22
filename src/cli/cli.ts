@@ -20,7 +20,7 @@ import { ConsoleReporter } from "../adapters/reporters/console.js";
 import { JsonReporter } from "../adapters/reporters/json.js";
 import { MarkdownReporter } from "../adapters/reporters/markdown.js";
 import type { ReporterPort } from "../ports/reporter-port.js";
-import type { AnalysisResult, FunctionVerdict } from "../domain/types.js";
+import type { AnalysisResult, BreakdownMode, FunctionVerdict } from "../domain/types.js";
 
 // ── Exit Codes ─────────────────────────────────────────────────────
 
@@ -72,7 +72,11 @@ program
   .option("-q, --quiet", "exit code only, no output")
   .option("-v, --verbose", "show discovery and warnings")
   .option("--no-color", "disable colors")
-  .option("--config <path>", "explicit config file path");
+  .option("--config <path>", "explicit config file path")
+  .option(
+    "--breakdown [mode]",
+    "show CC contributors (JSON only): all or exceeding (default)",
+  );
 
 // ── init subcommand ────────────────────────────────────────────────
 
@@ -227,10 +231,19 @@ program.action(async (opts: Record<string, unknown>) => {
       process.exit(EXIT_PARSE_ERROR);
     }
 
+    // 8b. Resolve breakdown mode
+    const breakdown = resolveBreakdownFlag(opts);
+    const format = resolved.format ?? "table";
+    if (breakdown !== "off" && format !== "json") {
+      console.error(
+        `Warning: --breakdown is only supported with JSON format (-f json). Ignoring for "${format}" output.`,
+      );
+    }
+
     // 9. Output (unless --quiet)
     const quiet = Boolean(opts["quiet"]);
     if (!quiet) {
-      const reporter = createReporter(resolved);
+      const reporter = createReporter(resolved, breakdown);
       let output: string;
 
       const summaryOnly = Boolean(opts["summary"]);
@@ -310,14 +323,29 @@ function resolveThresholdFlag(
   return opts["threshold"] as number | undefined;
 }
 
+function resolveBreakdownFlag(
+  opts: Record<string, unknown>,
+): BreakdownMode {
+  const raw = opts["breakdown"];
+  if (raw === undefined || raw === false) return "off";
+  if (raw === true) return "exceeding"; // --breakdown without value
+  if (raw === "all") return "all";
+  if (raw === "exceeding") return "exceeding";
+  // Invalid value
+  console.error(
+    `Invalid --breakdown value: "${String(raw)}". Valid values: all, exceeding (or omit for exceeding).`,
+  );
+  process.exit(EXIT_CONFIG_ERROR);
+}
+
 // ── Reporter Factory ───────────────────────────────────────────────
 
-function createReporter(config: ResolvedConfig): ReporterPort {
+function createReporter(config: ResolvedConfig, breakdown: BreakdownMode = "off"): ReporterPort {
   const format = config.format ?? "table";
 
   switch (format) {
     case "json":
-      return new JsonReporter();
+      return new JsonReporter({ breakdown });
     case "markdown":
       return new MarkdownReporter();
     case "table":

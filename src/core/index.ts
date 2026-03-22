@@ -26,5 +26,9 @@ export type {
   UnmatchedFunction,
   Warning,
   WarningCode,
+  ContributorKind,
+  ComplexityContributor,
+  BreakdownMode,
 } from "../domain/types.js";
 export { RiskLevel } from "../domain/types.js";
+export { selectContributors } from "../domain/contributors.js";

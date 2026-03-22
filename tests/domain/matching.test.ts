@@ -94,6 +94,7 @@ describe("defaultSpanMatcher", () => {
   const makeComplexity = (file: string, name: string, start: number, end: number, cc = 1) => ({
     identity: { filePath: file, qualifiedName: name, span: { startLine: start, startColumn: 0, endLine: end, endColumn: 0 } },
     cyclomaticComplexity: cc,
+    contributors: [] as const,
   });
   const makeCoverage = (file: string, name: string, start: number, end: number) => ({
     filePath: file, name, span: { startLine: start, startColumn: 0, endLine: end, endColumn: 0 },

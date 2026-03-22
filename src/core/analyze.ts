@@ -198,6 +198,7 @@ function scoreMatchedPairs(
       cyclomaticComplexity: complexity.cyclomaticComplexity,
       coveragePercent,
       crap,
+      contributors: complexity.contributors,
     };
     return { scored, threshold, exceeds: crap.value > threshold };
   });

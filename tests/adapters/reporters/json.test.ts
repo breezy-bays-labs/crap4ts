@@ -44,6 +44,7 @@ function makeVerdict(
       cyclomaticComplexity: cc,
       coveragePercent: covPct,
       crap: makeScore(crapValue),
+      contributors: [],
     },
     threshold,
     exceeds: crapValue > threshold,
@@ -247,8 +248,18 @@ describe("JsonReporter", () => {
       const output = reporter.format(result);
       const parsed = JSON.parse(output);
 
-      // Verify functions, warnings, summary, passed are all preserved exactly
-      expect(parsed.functions).toEqual(result.functions);
+      // Verify functions are preserved (contributors stripped in default "off" mode)
+      const expected = result.functions.map((v) => ({
+        scored: {
+          identity: v.scored.identity,
+          cyclomaticComplexity: v.scored.cyclomaticComplexity,
+          coveragePercent: v.scored.coveragePercent,
+          crap: v.scored.crap,
+        },
+        threshold: v.threshold,
+        exceeds: v.exceeds,
+      }));
+      expect(parsed.functions).toEqual(expected);
       expect(parsed.warnings).toEqual(result.warnings);
       expect(parsed.summary).toEqual(result.summary);
       expect(parsed.passed).toEqual(result.passed);

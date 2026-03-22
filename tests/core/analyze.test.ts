@@ -32,6 +32,7 @@ function makeComplexity(
   return {
     identity: { filePath, qualifiedName: name, span: s },
     cyclomaticComplexity: cc,
+    contributors: [],
   };
 }
 

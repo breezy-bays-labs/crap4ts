@@ -14,6 +14,28 @@ export interface SourceSpan {
   readonly endColumn: number; // 0-based
 }
 
+// ── Complexity Contributors ─────────────────────────────────────────
+
+export type ContributorKind =
+  | "if-branch"
+  | "ternary"
+  | "for-loop"
+  | "while-loop"
+  | "do-while-loop"
+  | "catch"
+  | "case-branch"
+  | "logical-operator"
+  | "optional-chain";
+
+export interface ComplexityContributor {
+  readonly kind: ContributorKind;
+  readonly line: number; // 1-based
+  readonly column: number; // 0-based
+  readonly operator?: string; // present for logical-operator and optional-chain
+}
+
+export type BreakdownMode = "all" | "exceeding" | "off";
+
 // ── Function Identity & Metrics ─────────────────────────────────────
 
 export interface FunctionIdentity {
@@ -26,6 +48,7 @@ export interface FunctionIdentity {
 export interface FunctionComplexity {
   readonly identity: FunctionIdentity;
   readonly cyclomaticComplexity: number; // >= 1
+  readonly contributors: ReadonlyArray<ComplexityContributor>;
 }
 
 export interface CoverageRatio {
@@ -61,6 +84,7 @@ export interface ScoredFunction {
   readonly cyclomaticComplexity: number;
   readonly coveragePercent: number;
   readonly crap: CrapScore;
+  readonly contributors: ReadonlyArray<ComplexityContributor>;
 }
 
 // ── Verdicts & Unmatched ────────────────────────────────────────────
