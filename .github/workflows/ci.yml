@@ -28,7 +28,7 @@ jobs:
       - run: npm run test
       - run: npm run build
 
-  crap-analysis:
+  end-to-end-action-smoke-test:
     runs-on: ubuntu-latest
     needs: check
     steps:
@@ -42,13 +42,16 @@ jobs:
       - run: npm ci
       - run: npm run test:coverage
       - run: npm run build
-      - name: CRAP Analysis (dogfooding)
+      - name: End-to-End Action Smoke Test
+        id: action_smoke_test
         uses: ./
         with:
           local: true
           changed-only: ${{ github.event_name == 'pull_request' }}
           post-comment: ${{ github.event_name == 'pull_request' }}
           upload-artifact: true
+      - name: Verify smoke test scored real functions
+        run: test "${{ steps.action_smoke_test.outputs.total }}" -gt 0
 
   mutation:
     runs-on: ubuntu-latest

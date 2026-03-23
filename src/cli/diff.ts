@@ -10,32 +10,50 @@ export interface ExecFn {
 
 const execFileAsync = promisify(execFile);
 
+type RawExecFile = (
+  command: string,
+  args: string[],
+) => Promise<{ stdout: string }>;
+
 /**
  * Default exec implementation using execFile (not exec) to avoid
  * shell injection. Arguments are passed as an array, never interpolated.
  */
-const defaultExec: ExecFn = async (command: string, args: string[]) => {
-  try {
-    const { stdout } = await execFileAsync(command, args);
-    return { stdout, exitCode: 0 };
-  } catch (error: unknown) {
-    if (error instanceof Error && "code" in error) {
-      const execError = error as { stdout?: string; code?: number | string };
-      // ENOENT = binary not found in PATH
-      if (execError.code === "ENOENT") {
-        throw new Error(`"${command}" is not installed or not in PATH`);
-      }
-      // Normal child process non-zero exit
-      if (typeof execError.code === "number") {
-        return {
-          stdout: execError.stdout ?? "",
-          exitCode: execError.code,
-        };
-      }
+export function createExecAdapter(exec: RawExecFile): ExecFn {
+  return async (command: string, args: string[]) => {
+    try {
+      const { stdout } = await exec(command, args);
+      return { stdout, exitCode: 0 };
+    } catch (error: unknown) {
+      return handleExecError(command, error);
     }
-    // Unexpected error shape — do not suppress
-    throw error;
+  };
+}
+
+const defaultExec = createExecAdapter(
+  (command: string, args: string[]) => execFileAsync(command, args),
+);
+
+function handleExecError(
+  command: string,
+  error: unknown,
+): { stdout: string; exitCode: number } {
+  if (error instanceof Error && "code" in error) {
+    const execError = error as { stdout?: string; code?: number | string };
+
+    if (execError.code === "ENOENT") {
+      throw new Error(`"${command}" is not installed or not in PATH`);
+    }
+
+    if (typeof execError.code === "number") {
+      return {
+        stdout: execError.stdout ?? "",
+        exitCode: execError.code,
+      };
+    }
   }
+
+  throw error;
 };
 
 // ── parseUnifiedDiff ────────────────────────────────────────────────

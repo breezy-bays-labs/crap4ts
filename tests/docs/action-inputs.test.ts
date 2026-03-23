@@ -23,7 +23,7 @@ describe("action.yml parity with README", () => {
 
   it("all action inputs are documented in README", () => {
     const inputs = extractYamlKeys(actionYml, "inputs").filter(
-      (k) => k !== "local", // local is dogfooding-only
+      (k) => k !== "local", // local is repo-internal smoke-test wiring
     );
 
     expect(inputs.length).toBeGreaterThan(0);

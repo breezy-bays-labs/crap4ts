@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { getChangedFiles, parseUnifiedDiff, type ExecFn } from "../../src/cli/diff.js";
+import {
+  createExecAdapter,
+  getChangedFiles,
+  parseUnifiedDiff,
+  type ExecFn,
+} from "../../src/cli/diff.js";
 
 // ── Exec Helpers ────────────────────────────────────────────────────
 
@@ -254,5 +259,54 @@ describe("getChangedFiles", () => {
     const filter = await getChangedFiles("main\x1b[31m", { exec });
 
     expect(filter.description).not.toContain("\x1b");
+  });
+});
+
+describe("createExecAdapter", () => {
+  it("returns stdout for successful exec calls", async () => {
+    const exec = createExecAdapter(async () => ({ stdout: "ok" }));
+
+    await expect(exec("git", ["status"])).resolves.toEqual({
+      stdout: "ok",
+      exitCode: 0,
+    });
+  });
+
+  it("surfaces missing binary errors clearly", async () => {
+    const exec = createExecAdapter(async () => {
+      const error = new Error("spawn git ENOENT") as Error & { code: string };
+      error.code = "ENOENT";
+      throw error;
+    });
+
+    await expect(exec("git", ["status"])).rejects.toThrow(
+      '"git" is not installed or not in PATH',
+    );
+  });
+
+  it("converts numeric exit codes into exec results", async () => {
+    const exec = createExecAdapter(async () => {
+      const error = new Error("bad revision") as Error & {
+        code: number;
+        stdout: string;
+      };
+      error.code = 128;
+      error.stdout = "fatal: bad revision";
+      throw error;
+    });
+
+    await expect(exec("git", ["diff"])).resolves.toEqual({
+      stdout: "fatal: bad revision",
+      exitCode: 128,
+    });
+  });
+
+  it("rethrows unexpected error shapes", async () => {
+    const error = new Error("boom");
+    const exec = createExecAdapter(async () => {
+      throw error;
+    });
+
+    await expect(exec("git", ["status"])).rejects.toBe(error);
   });
 });

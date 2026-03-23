@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { computeCrap } from "../domain/crap.js";
 import {
   createThresholdConfig,
@@ -13,6 +14,7 @@ import type {
 } from "../domain/types.js";
 import { extractCoveragePercent, flattenCoverages } from "./analyze.js";
 import type { AnalyzeDeps } from "./deps.js";
+import { normalizeProjectPath, resolveInputPath } from "./path-utils.js";
 
 // ── Single-File Analysis ──────────────────────────────────────────
 
@@ -20,6 +22,7 @@ export interface AnalyzeFileOptions {
   coverage?: string;
   threshold?: number;
   coverageMetric?: "line" | "branch";
+  cwd?: string;
 }
 
 export interface AnalyzeFileResult {
@@ -40,19 +43,26 @@ export async function analyzeFile(
   options?: AnalyzeFileOptions,
   deps?: AnalyzeDeps,
 ): Promise<AnalyzeFileResult> {
-  const resolvedDeps = deps ?? (await loadDefaults());
   const opts = options ?? {};
+  const cwd = opts.cwd ?? process.cwd();
+  const resolvedDeps = deps ?? (await loadDefaults(cwd));
   const coverageMetric = opts.coverageMetric ?? "line";
   const thresholdConfig = createThresholdConfig({ preset: opts.threshold });
+  const normalizedFilePath = normalizeProjectPath(filePath, cwd);
+  const absoluteFilePath = resolve(cwd, filePath);
+  const coveragePath = resolveInputPath(opts.coverage, cwd);
 
-  const source = await resolvedDeps.readFile(filePath);
-  const complexities = resolvedDeps.complexityPort.extract(source, filePath);
+  const source = await resolvedDeps.readFile(absoluteFilePath);
+  const complexities = resolvedDeps.complexityPort.extract(
+    source,
+    normalizedFilePath,
+  );
   if (complexities.length === 0) return { verdicts: [], warnings: [] };
 
   // Pass source content for accurate line mapping (Tier 2)
-  const sourceContents = new Map([[filePath, source]]);
+  const sourceContents = new Map([[normalizedFilePath, source]]);
   const { coverages, warnings: coverageWarnings } =
-    await loadFileCoverages(resolvedDeps, opts.coverage, sourceContents);
+    await loadFileCoverages(resolvedDeps, coveragePath, sourceContents);
 
   const matchResult = resolvedDeps.matcher(complexities, coverages);
 
@@ -125,7 +135,7 @@ async function loadFileCoverages(
   return { coverages: flattenCoverages(coverage), warnings: [...warnings] };
 }
 
-async function loadDefaults(): Promise<AnalyzeDeps> {
+async function loadDefaults(cwd?: string): Promise<AnalyzeDeps> {
   const { createDefaultDeps } = await import("./defaults.js");
-  return createDefaultDeps();
+  return createDefaultDeps(cwd);
 }

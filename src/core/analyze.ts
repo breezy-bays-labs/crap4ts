@@ -20,6 +20,11 @@ import type {
   ScoredFunction,
 } from "../domain/types.js";
 import type { AnalyzeDeps } from "./deps.js";
+import {
+  normalizeGlobPattern,
+  resolveIncludePatterns,
+  resolveInputPath,
+} from "./path-utils.js";
 export type { AnalyzeDeps };
 
 // ── Main Entry Point ──────────────────────────────────────────────
@@ -74,7 +79,18 @@ export async function analyze(
   const matchResult = resolvedDeps.matcher(complexitiesToMatch, allCoverages);
 
   // 8. Score matched pairs and collect unmatched
-  const allVerdicts = scoreMatchedPairs(matchResult.matched, opts.coverageMetric, thresholdConfig, resolvedDeps.globMatcher);
+  const matchedVerdicts = scoreMatchedPairs(
+    matchResult.matched,
+    opts.coverageMetric,
+    thresholdConfig,
+    resolvedDeps.globMatcher,
+  );
+  const unmatchedVerdicts = scoreUnmatchedComplexities(
+    matchResult.unmatchedComplexity,
+    thresholdConfig,
+    resolvedDeps.globMatcher,
+  );
+  const allVerdicts = [...matchedVerdicts, ...unmatchedVerdicts];
   const allUnmatched = collectUnmatched(matchResult);
 
   // 9. Collect warnings
@@ -108,31 +124,19 @@ interface ResolvedOptions {
   filter: FunctionFilter | undefined;
 }
 
-function resolveIncludePatterns(options?: AnalyzeOptions): string[] {
-  if (options?.include) return options.include;
-
-  const src = options?.src;
-  if (src) {
-    const dirs = Array.isArray(src) ? src : [src];
-    return dirs.flatMap((dir) => {
-      const normalized = dir.replace(/\/+$/, "");
-      return [`${normalized}/**/*.ts`, `${normalized}/**/*.tsx`];
-    });
-  }
-
-  return ["**/*.ts", "**/*.tsx"];
-}
-
 function resolveOptions(options?: AnalyzeOptions): ResolvedOptions {
   const opts = options ?? {};
+  const cwd = opts.cwd ?? process.cwd();
   return {
-    cwd: opts.cwd ?? process.cwd(),
-    coveragePath: opts.coverage,
+    cwd,
+    coveragePath: resolveInputPath(opts.coverage, cwd),
     threshold: opts.threshold,
     thresholds: opts.thresholds,
     coverageMetric: opts.coverageMetric ?? "line",
-    include: resolveIncludePatterns(options),
-    exclude: opts.exclude ?? DEFAULT_EXCLUDE,
+    include: resolveIncludePatterns(cwd, opts.src, opts.include),
+    exclude: (opts.exclude ?? DEFAULT_EXCLUDE).map((pattern) =>
+      normalizeGlobPattern(pattern, cwd),
+    ),
     filter: opts.filter,
   };
 }
@@ -201,6 +205,33 @@ function scoreMatchedPairs(
       contributors: complexity.contributors,
     };
     return { scored, threshold, exceeds: crap.value > threshold };
+  });
+}
+
+function scoreUnmatchedComplexities(
+  unmatched: MatchResult["unmatchedComplexity"],
+  thresholdConfig: ThresholdConfig,
+  globMatcher: (path: string, pattern: string) => boolean,
+): FunctionVerdict[] {
+  return unmatched.map((complexity) => {
+    const crap = computeCrap(complexity.cyclomaticComplexity, 0);
+    const threshold = resolveThreshold(
+      thresholdConfig,
+      complexity.identity.filePath,
+      globMatcher,
+    );
+
+    return {
+      scored: {
+        identity: complexity.identity,
+        cyclomaticComplexity: complexity.cyclomaticComplexity,
+        coveragePercent: 0,
+        crap,
+        contributors: complexity.contributors,
+      },
+      threshold,
+      exceeds: crap.value > threshold,
+    };
   });
 }
 

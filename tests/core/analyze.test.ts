@@ -310,6 +310,10 @@ describe("analyze", () => {
 
     const result = await analyze({ cwd: "/project" }, deps);
 
+    expect(result.functions).toHaveLength(1);
+    expect(result.functions[0]!.scored.coveragePercent).toBe(0);
+    expect(result.functions[0]!.scored.crap.value).toBe(30);
+    expect(result.functions[0]!.exceeds).toBe(true);
     expect(result.unmatched).toHaveLength(1);
     expect(result.unmatched[0]!.kind).toBe("no-coverage");
     if (result.unmatched[0]!.kind === "no-coverage") {
@@ -318,6 +322,7 @@ describe("analyze", () => {
     }
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]!.code).toBe("unmatched-no-coverage");
+    expect(result.passed).toBe(false);
   });
 
   it("unmatched coverage entries get no-ast kind", async () => {
@@ -386,6 +391,53 @@ describe("analyze", () => {
 
     expect(fileAPaths).toHaveLength(2);
     expect(fileBPaths).toHaveLength(1);
+  });
+
+  it("resolves relative coverage paths against cwd", async () => {
+    const comp = makeComplexity("src/math.ts", "add", 3, span(1, 10));
+    const cov = makeCoverage("src/math.ts", "add", 80, span(1, 10));
+    let readJsonPath = "";
+
+    const deps = createDeps({
+      complexityPort: fakeComplexityPort(
+        new Map([["src/math.ts", [comp]]]),
+      ),
+      coveragePort: fakeCoveragePort(
+        new Map([["src/math.ts", [cov]]]),
+      ),
+      matcher: fakeMatcher([{ complexity: comp, coverage: cov }]),
+      findFiles: async () => ["src/math.ts"],
+      readFile: async () => "// source",
+      readJson: async (path) => {
+        readJsonPath = path;
+        return {};
+      },
+    });
+
+    await analyze(
+      { cwd: "/project", coverage: "coverage/coverage-final.json" },
+      deps,
+    );
+
+    expect(readJsonPath).toBe("/project/coverage/coverage-final.json");
+  });
+
+  it("normalizes absolute src paths before file discovery", async () => {
+    let includePatterns: string[] = [];
+
+    const deps = createDeps({
+      findFiles: async (patterns) => {
+        includePatterns = patterns;
+        return [];
+      },
+    });
+
+    await analyze(
+      { cwd: "/project", src: ["/project/src"] },
+      deps,
+    );
+
+    expect(includePatterns).toEqual(["src/**/*.ts", "src/**/*.tsx"]);
   });
 
   it("computes overall summary stats", async () => {
@@ -672,9 +724,9 @@ describe("analyze", () => {
     const result = await analyze({ cwd: "/project" }, deps);
 
     // 2 matched functions + 1 unmatched
-    expect(result.functions).toHaveLength(2);
+    expect(result.functions).toHaveLength(3);
     expect(result.unmatched).toHaveLength(1);
-    expect(result.summary.totalFunctions).toBe(2); // only matched get verdicts
+    expect(result.summary.totalFunctions).toBe(3);
     expect(result.passed).toBe(false); // CRAP(20, 10%) is huge
   });
 

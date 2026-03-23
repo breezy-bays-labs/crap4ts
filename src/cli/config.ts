@@ -186,25 +186,32 @@ export function resolveConfig(options: ResolveConfigOptions): ResolvedConfig {
   const cli = options.cliFlags ?? {};
 
   return {
-    // Threshold: CLI > env > file
-    threshold: cli.threshold ?? env.threshold ?? file.threshold,
-    // Coverage path: CLI > env (runtime-only, not in config file)
-    coverage: cli.coverage ?? env.coverage,
-    // Format: CLI > env > file
-    format: cli.format ?? env.format ?? file.format,
-    // NO_COLOR: CLI > env
-    noColor: cli.noColor ?? env.noColor ?? false,
-    // CLI > file fields
-    coverageMetric: cli.coverageMetric ?? file.coverageMetric,
-    include: cli.include ?? file.include,
-    exclude: cli.exclude ?? file.exclude,
+    threshold: firstDefined(cli.threshold, env.threshold, file.threshold),
+    coverage: firstDefined(cli.coverage, env.coverage),
+    format: firstDefined(cli.format, env.format, file.format),
+    noColor: firstDefined(cli.noColor, env.noColor, false) ?? false,
+    coverageMetric: firstDefined(cli.coverageMetric, file.coverageMetric),
+    include: firstDefined(cli.include, file.include),
+    exclude: firstDefined(cli.exclude, file.exclude),
     thresholds: file.thresholds,
-    src: cli.src ?? file.src,
-    breakdown: cli.breakdown ?? file.breakdown,
-    sort: cli.sort ?? file.sort,
-    top: cli.top ?? file.top,
-    summary: cli.summary ?? file.summary,
+    src: firstDefined(cli.src, file.src),
+    breakdown: firstDefined(cli.breakdown, file.breakdown),
+    sort: firstDefined(cli.sort, file.sort),
+    top: firstDefined(cli.top, file.top),
+    summary: firstDefined(cli.summary, file.summary),
   };
+}
+
+function firstDefined<T>(
+  ...values: ReadonlyArray<T | undefined>
+): T | undefined {
+  for (const value of values) {
+    if (value !== undefined) {
+      return value;
+    }
+  }
+
+  return undefined;
 }
 
 type FormatType = "table" | "json" | "markdown";

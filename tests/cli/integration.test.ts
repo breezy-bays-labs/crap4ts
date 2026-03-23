@@ -6,7 +6,9 @@ import {
   mkdtempSync,
   existsSync,
   readFileSync,
+  mkdirSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 
@@ -15,6 +17,9 @@ const ROOT = join(__dirname, "../..");
 const CLI = join(ROOT, "dist/cli.js");
 const FIXTURES = join(ROOT, "tests/fixtures");
 const ISTANBUL_COV = join(FIXTURES, "istanbul-coverage.json");
+const PACKAGE_VERSION = JSON.parse(
+  readFileSync(join(ROOT, "package.json"), "utf-8"),
+) as { version: string };
 
 // ── Helper ──────────────────────────────────────────────────────────
 
@@ -41,9 +46,7 @@ async function runCli(
 // ── Build guard ─────────────────────────────────────────────────────
 
 beforeAll(async () => {
-  if (!existsSync(CLI)) {
-    await execFileAsync("npm", ["run", "build"], { cwd: ROOT });
-  }
+  await execFileAsync("npm", ["run", "build"], { cwd: ROOT });
 }, 30_000);
 
 // ── Exit Codes ──────────────────────────────────────────────────────
@@ -110,6 +113,8 @@ describe("output formats", () => {
       ISTANBUL_COV,
       "--src",
       FIXTURES,
+      "--threshold",
+      "1000",
       "-f",
       "json",
     ]);
@@ -134,6 +139,8 @@ describe("output formats", () => {
       ISTANBUL_COV,
       "--src",
       FIXTURES,
+      "--threshold",
+      "1000",
       "-f",
       "markdown",
     ]);
@@ -180,6 +187,8 @@ describe("flags", () => {
       ISTANBUL_COV,
       "--src",
       FIXTURES,
+      "--threshold",
+      "1000",
       "--quiet",
     ]);
     expect(exitCode).toBe(0);
@@ -214,6 +223,8 @@ describe("flags", () => {
       ISTANBUL_COV,
       "--src",
       FIXTURES,
+      "--threshold",
+      "1000",
       "--summary",
     ]);
     expect(exitCode).toBe(0);
@@ -242,7 +253,7 @@ describe("flags", () => {
 describe("environment variables", () => {
   it("CRAP4TS_FORMAT=json sets output format", async () => {
     const { exitCode, stdout } = await runCli(
-      ["--coverage", ISTANBUL_COV, "--src", FIXTURES],
+      ["--coverage", ISTANBUL_COV, "--src", FIXTURES, "--threshold", "1000"],
       { env: { CRAP4TS_FORMAT: "json" } },
     );
     expect(exitCode).toBe(0);
@@ -276,6 +287,114 @@ describe("environment variables", () => {
     );
     const parsed = JSON.parse(stdout);
     expect(parsed.config.defaultThreshold).toBe(25);
+  });
+});
+
+// ── Path Handling ───────────────────────────────────────────────────
+
+describe("path handling and auto-discovery", () => {
+  let tempProjectDir: string;
+  let coveragePath: string;
+  let absoluteSrcPath: string;
+
+  beforeAll(() => {
+    tempProjectDir = mkdtempSync(join(tmpdir(), "crap4ts-project-"));
+    absoluteSrcPath = join(tempProjectDir, "src");
+    coveragePath = join(tempProjectDir, "coverage", "coverage-final.json");
+    const sourcePath = join(absoluteSrcPath, "math.ts");
+
+    mkdirSync(absoluteSrcPath, { recursive: true });
+    mkdirSync(join(tempProjectDir, "coverage"), { recursive: true });
+
+    writeFileSync(
+      join(tempProjectDir, "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { rootDir: "src" } }, null, 2),
+      "utf-8",
+    );
+    writeFileSync(
+      sourcePath,
+      [
+        "export function add(a: number, b: number) {",
+        "  return a + b;",
+        "}",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+    writeFileSync(
+      coveragePath,
+      JSON.stringify(
+        {
+          [sourcePath]: {
+            path: sourcePath,
+            fnMap: {
+              "0": {
+                name: "add",
+                decl: {
+                  start: { line: 1, column: 16 },
+                  end: { line: 1, column: 19 },
+                },
+                loc: {
+                  start: { line: 1, column: 0 },
+                  end: { line: 3, column: 1 },
+                },
+              },
+            },
+            f: { "0": 1 },
+            statementMap: {
+              "0": {
+                start: { line: 2, column: 2 },
+                end: { line: 2, column: 15 },
+              },
+            },
+            s: { "0": 1 },
+            branchMap: {},
+            b: {},
+          },
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+  });
+
+  afterAll(() => {
+    rmSync(tempProjectDir, { recursive: true, force: true });
+  });
+
+  it("auto-discovers coverage and source roots without returning a false-green empty analysis", async () => {
+    const { exitCode, stdout } = await runCli(["-f", "json"], {
+      cwd: tempProjectDir,
+    });
+
+    expect(exitCode).toBe(0);
+
+    const parsed = JSON.parse(stdout);
+    expect(parsed.summary.totalFunctions).toBe(1);
+    expect(parsed.functions).toHaveLength(1);
+    expect(parsed.functions[0].scored.identity.filePath).toBe("src/math.ts");
+    expect(parsed.version).toBe(PACKAGE_VERSION.version);
+  });
+
+  it("accepts absolute --src paths and relative --coverage paths together", async () => {
+    const { exitCode, stdout } = await runCli(
+      [
+        "--coverage",
+        "coverage/coverage-final.json",
+        "--src",
+        absoluteSrcPath,
+        "-f",
+        "json",
+      ],
+      { cwd: tempProjectDir },
+    );
+
+    expect(exitCode).toBe(0);
+
+    const parsed = JSON.parse(stdout);
+    expect(parsed.summary.totalFunctions).toBe(1);
+    expect(parsed.functions[0].scored.identity.filePath).toBe("src/math.ts");
   });
 });
 

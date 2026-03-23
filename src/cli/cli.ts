@@ -16,12 +16,18 @@ import {
   formatCoverageNotFoundError,
 } from "./discover.js";
 import { getChangedFiles } from "./diff.js";
-import { ConsoleReporter } from "../adapters/reporters/console.js";
-import { JsonReporter } from "../adapters/reporters/json.js";
-import { MarkdownReporter } from "../adapters/reporters/markdown.js";
 import { prepareForJsonOutput } from "../core/prepare-output.js";
-import type { ReporterPort } from "../ports/reporter-port.js";
-import type { AnalysisResult, BreakdownMode, FunctionVerdict } from "../domain/types.js";
+import {
+  applyFilters,
+  CliOptionError,
+  coerceArrayOption,
+  createReporter,
+  formatSummaryLine,
+  parseBreakdownCliFlag,
+  resolveThresholdFlag,
+  validateMutualExclusions,
+} from "./runtime.js";
+import type { AnalysisResult } from "../domain/types.js";
 
 // ── Exit Codes ─────────────────────────────────────────────────────
 
@@ -183,6 +189,8 @@ program.action(async (opts: Record<string, unknown>) => {
         summary: opts["summary"] === true ? true : undefined,
       },
     });
+    const include = coerceArrayOption(resolved.include);
+    const exclude = coerceArrayOption(resolved.exclude);
 
     // 5. Auto-discover coverage if not explicitly provided
     let coveragePath = resolved.coverage;
@@ -229,8 +237,8 @@ program.action(async (opts: Record<string, unknown>) => {
         threshold: resolved.threshold,
         thresholds: resolved.thresholds,
         coverageMetric: resolved.coverageMetric ?? "line",
-        include: resolved.include,
-        exclude: resolved.exclude,
+        include,
+        exclude,
         filter: changedSinceRef
           ? await getChangedFiles(changedSinceRef, { cwd })
           : undefined,
@@ -287,7 +295,7 @@ program.action(async (opts: Record<string, unknown>) => {
     // 10. Exit with appropriate code
     process.exit(result.passed ? EXIT_OK : EXIT_THRESHOLD);
   } catch (err) {
-    if (err instanceof MutualExclusionError) {
+    if (err instanceof CliOptionError) {
       console.error(err.message);
       process.exit(EXIT_CONFIG_ERROR);
     }
@@ -296,153 +304,6 @@ program.action(async (opts: Record<string, unknown>) => {
     process.exit(EXIT_CONFIG_ERROR);
   }
 });
-
-// ── Validation ─────────────────────────────────────────────────────
-
-class MutualExclusionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "MutualExclusionError";
-  }
-}
-
-function validateMutualExclusions(
-  opts: Record<string, unknown>,
-): void {
-  // --strict, --lenient, --threshold are mutually exclusive
-  const thresholdFlags = [
-    opts["strict"] ? "--strict" : null,
-    opts["lenient"] ? "--lenient" : null,
-    opts["threshold"] !== undefined ? "--threshold" : null,
-  ].filter(Boolean) as string[];
-
-  if (thresholdFlags.length > 1) {
-    throw new MutualExclusionError(
-      `Conflicting options: ${thresholdFlags.join(", ")} — pick one.`,
-    );
-  }
-
-  // --quiet and --verbose are mutually exclusive
-  if (opts["quiet"] && opts["verbose"]) {
-    throw new MutualExclusionError(
-      "Conflicting options: --quiet, --verbose — pick one.",
-    );
-  }
-}
-
-function resolveThresholdFlag(
-  opts: Record<string, unknown>,
-): number | undefined {
-  if (opts["strict"]) return 8;
-  if (opts["lenient"]) return 30;
-  return opts["threshold"] as number | undefined;
-}
-
-function parseBreakdownCliFlag(
-  raw: unknown,
-): BreakdownMode | undefined {
-  if (raw === undefined || raw === false) return undefined;
-  if (raw === true) return "exceeding"; // --breakdown without value
-  if (raw === "all") return "all";
-  if (raw === "exceeding") return "exceeding";
-  if (raw === "off") return "off";
-  // Invalid value
-  console.error(
-    `Invalid --breakdown value: "${String(raw)}". Valid values: all, exceeding (or omit for exceeding).`,
-  );
-  process.exit(EXIT_CONFIG_ERROR);
-}
-
-// ── Reporter Factory ───────────────────────────────────────────────
-
-function createReporter(config: ResolvedConfig): ReporterPort {
-  const format = config.format ?? "table";
-
-  switch (format) {
-    case "json":
-      return new JsonReporter();
-    case "markdown":
-      return new MarkdownReporter();
-    case "table":
-      return new ConsoleReporter({ color: !config.noColor });
-    default:
-      throw new Error(`Unknown output format: "${format}". Valid formats: table, json, markdown`);
-  }
-}
-
-// ── Filtering & Sorting ────────────────────────────────────────────
-
-function applyFilters(
-  result: AnalysisResult,
-  sortField?: string,
-  topN?: number,
-): AnalysisResult {
-  const hasSort = Boolean(sortField);
-  const hasTopN = topN !== undefined && topN > 0;
-
-  if (!hasSort && !hasTopN) {
-    return result;
-  }
-
-  // Default to sorting by CRAP descending when using --top without --sort
-  const effectiveSort = sortField ?? (hasTopN ? "crap" : undefined);
-  let verdicts = effectiveSort
-    ? sortVerdicts([...result.functions], effectiveSort)
-    : [...result.functions];
-
-  if (hasTopN) {
-    verdicts = verdicts.slice(0, topN);
-  }
-
-  return { ...result, functions: verdicts };
-}
-
-function sortVerdicts(
-  verdicts: FunctionVerdict[],
-  field: string,
-): FunctionVerdict[] {
-  const sorted = verdicts;
-
-  switch (field) {
-    case "crap":
-      sorted.sort((a, b) => b.scored.crap.value - a.scored.crap.value);
-      break;
-    case "complexity":
-      sorted.sort(
-        (a, b) =>
-          b.scored.cyclomaticComplexity - a.scored.cyclomaticComplexity,
-      );
-      break;
-    case "coverage":
-      sorted.sort(
-        (a, b) =>
-          a.scored.coveragePercent - b.scored.coveragePercent,
-      );
-      break;
-    case "name":
-      sorted.sort((a, b) =>
-        a.scored.identity.qualifiedName.localeCompare(
-          b.scored.identity.qualifiedName,
-        ),
-      );
-      break;
-    default:
-      console.error(
-        `Invalid --sort value: "${field}". Valid values: crap, complexity, coverage, name.`,
-      );
-      process.exit(EXIT_CONFIG_ERROR);
-  }
-
-  return sorted;
-}
-
-// ── Summary Formatting ─────────────────────────────────────────────
-
-function formatSummaryLine(result: AnalysisResult): string {
-  const { summary, thresholdConfig, passed } = result;
-  const status = passed ? "PASS" : "FAIL";
-  return `${status}: ${summary.totalFunctions} functions | ${summary.exceedingThreshold} above threshold (${thresholdConfig.defaultThreshold}) | worst: ${summary.maxCrap.value.toFixed(1)} | avg: ${summary.averageCrap.toFixed(1)}`;
-}
 
 // ── Run ────────────────────────────────────────────────────────────
 

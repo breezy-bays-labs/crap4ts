@@ -9,7 +9,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
-import { existsSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { defineConfig } from "../../src/core/define-config.js";
 import { resolveConfig } from "../../src/cli/config.js";
 
@@ -40,9 +40,7 @@ async function runCli(
 }
 
 beforeAll(async () => {
-  if (!existsSync(CLI)) {
-    await execFileAsync("npm", ["run", "build"], { cwd: ROOT });
-  }
+  await execFileAsync("npm", ["run", "build"], { cwd: ROOT });
 }, 30_000);
 
 // ── Schema validation ───────────────────────────────────────────────

@@ -235,6 +235,45 @@ describe("analyzeFile", () => {
     ).rejects.toThrow("File not found");
   });
 
+  it("resolves relative coverage paths against cwd and normalizes absolute file paths", async () => {
+    const comp = makeComplexity("src/math.ts", "add", 3, span(1, 10));
+    const cov = makeCoverage("src/math.ts", "add", 80, span(1, 10));
+    let extractedFilePath = "";
+    let readFilePath = "";
+    let readJsonPath = "";
+
+    const deps = createDeps({
+      complexityPort: {
+        extract(_, filePath) {
+          extractedFilePath = filePath;
+          return [comp];
+        },
+      },
+      coveragePort: fakeCoveragePort(
+        new Map([["src/math.ts", [cov]]]),
+      ),
+      matcher: fakeMatcher([{ complexity: comp, coverage: cov }]),
+      readFile: async (path) => {
+        readFilePath = path;
+        return "function add(a, b) { return a + b; }";
+      },
+      readJson: async (path) => {
+        readJsonPath = path;
+        return {};
+      },
+    });
+
+    await analyzeFile(
+      "/project/src/math.ts",
+      { cwd: "/project", coverage: "coverage/coverage-final.json" },
+      deps,
+    );
+
+    expect(readFilePath).toBe("/project/src/math.ts");
+    expect(extractedFilePath).toBe("src/math.ts");
+    expect(readJsonPath).toBe("/project/coverage/coverage-final.json");
+  });
+
   it("defaults to 100% coverage when branch metric requested but function has no branches", async () => {
     const comp = makeComplexity("src/simple.ts", "add", 1, span(1, 5));
     const cov: FunctionCoverage = {
