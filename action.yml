@@ -16,7 +16,7 @@ inputs:
     required: false
     default: ''
   src:
-    description: 'Source directories (space-separated). Omit to let CLI auto-discover.'
+    description: 'Source directories (space-separated; paths containing spaces are not supported). Omit to let CLI auto-discover.'
     required: false
     default: ''
   changed-only:

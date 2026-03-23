@@ -91,6 +91,8 @@ Add CRAP analysis to your CI pipeline with auto-updating PR comments:
 | `version` | `latest` | crap4ts version to install via npx |
 | `working-directory` | `.` | Directory to run analysis from |
 
+`src` is split on spaces inside the composite action. Paths containing spaces are not currently supported there.
+
 | Output | Description |
 |--------|-------------|
 | `passed` | Whether all functions passed threshold |

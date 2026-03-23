@@ -73,6 +73,21 @@ describe("resolveInputPath", () => {
 
     expect(resolveInputPath(missing, cwd)).toBe(join(canonicalCwd, "coverage", "missing.json"));
   });
+
+  it("canonicalizes deeply nested missing paths from the nearest existing ancestor", () => {
+    const root = createTempDir("crap4ts-paths-");
+    const actual = join(root, "actual");
+    const link = join(root, "link");
+
+    mkdirSync(actual, { recursive: true });
+    symlinkSync(actual, link);
+    const canonicalActual = realpathSync.native(actual);
+
+    const missing = join(link, "coverage", "nested", "reports", "missing.json");
+
+    expect(resolveInputPath(missing, link))
+      .toBe(join(canonicalActual, "coverage", "nested", "reports", "missing.json"));
+  });
 });
 
 describe("normalizeGlobPattern", () => {
