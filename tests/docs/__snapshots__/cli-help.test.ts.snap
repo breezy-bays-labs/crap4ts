@@ -1,0 +1,35 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`CLI help output > matches the expected options snapshot 1`] = `
+"Usage: crap4ts [options] [command]
+
+CRAP score analyzer for TypeScript — find complex, under-tested functions
+
+Options:
+  -V, --version             output the version number
+  -c, --coverage <path>     path to coverage JSON
+  -s, --src <paths...>      source directories
+  -t, --threshold <n>       CRAP threshold
+  --strict                  use strict threshold (8)
+  --lenient                 use lenient threshold (30)
+  --coverage-metric <type>  coverage metric: line or branch
+  -f, --format <type>       output format: table, json, markdown
+  -n, --top <n>             show N worst functions
+  --sort <field>            sort by: crap, complexity, coverage, name
+  --changed-since <ref>     only analyze files changed since git ref
+  --diff <ref>              alias for --changed-since
+  --include <glob...>       file include globs
+  --exclude <glob...>       file exclude globs
+  --summary                 show summary line only
+  -q, --quiet               exit code only, no output
+  -v, --verbose             show discovery and warnings
+  --no-color                disable colors
+  --config <path>           explicit config file path
+  --breakdown [mode]        show CC contributors (JSON only): all or exceeding
+                            (default)
+  -h, --help                display help for command
+
+Commands:
+  init                      scaffold a crap4ts.config.ts with sensible defaults
+"
+`;
