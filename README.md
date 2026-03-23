@@ -131,7 +131,7 @@ Notes:
 | `upload-artifact` | `true` | Upload JSON report as artifact |
 | `coverage-path` | auto | Path to coverage JSON |
 | `src` | auto | Source directories (space-separated) |
-| `coverage-metric` | auto (`line` in the CLI) | Coverage metric: `line` or `branch` |
+| `coverage-metric` | delegated to CLI (`line`) | Coverage metric: `line` or `branch` |
 | `version` | `latest` | crap4ts version to install via npx |
 | `working-directory` | `.` | Directory to run analysis from |
 
