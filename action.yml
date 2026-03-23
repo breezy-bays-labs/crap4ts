@@ -117,9 +117,9 @@ runs:
             cmd+=(--changed-since "$PR_BASE_SHA")
           fi
 
-          printf "Running:"
-          printf " %q" "${cmd[@]}"
-          echo
+          printf "Running:" >&2
+          printf " %q" "${cmd[@]}" >&2
+          echo >&2
           "${cmd[@]}"
         }
 

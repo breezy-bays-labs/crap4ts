@@ -17,4 +17,10 @@ describe("action shell hardening", () => {
     expect(actionYml).toContain("markdown report failed with exit code");
     expect(actionYml).toContain("markdown report produced no output");
   });
+
+  it("writes command logging to stderr so generated reports stay parseable", () => {
+    expect(actionYml).toContain('printf "Running:" >&2');
+    expect(actionYml).toContain('printf " %q" "${cmd[@]}" >&2');
+    expect(actionYml).toContain("echo >&2");
+  });
 });
