@@ -29,13 +29,39 @@ node dist/cli.js --summary
 
 ## Publish Steps
 
-1. Bump `package.json` from the current prerelease version to the release version.
-2. Update the `CHANGELOG.md` heading from `Unreleased` to the release date.
-3. Commit the release version and changelog.
-4. Publish to npm.
-5. Tag the release commit as `vX.Y.Z` and push the tag.
-6. Move or create the floating major Action tag (`v1`) to the same release commit.
-7. Create the GitHub release using the changelog entry as the release notes.
+1. Bump the package version without creating a tag yet:
+
+   ```bash
+   npm version <version> --no-git-tag-version
+   ```
+
+2. Update the `CHANGELOG.md` heading from `Unreleased` to the release date, then commit the release metadata:
+
+   ```bash
+   git add package.json package-lock.json CHANGELOG.md
+   git commit -m "chore: release v<version>"
+   ```
+
+3. Create and push the release tag from that commit:
+
+   ```bash
+   git tag v<version>
+   git push origin main
+   git push origin v<version>
+   ```
+
+4. Create the GitHub release for that tag. This repository's [`publish.yml`](./.github/workflows/publish.yml) runs on `release.published`, so publishing the GitHub release is what triggers `npm publish`:
+
+   ```bash
+   gh release create v<version> --title "v<version>" --notes-file <notes-file>
+   ```
+
+5. After the publish workflow succeeds, move or create the floating major Action tag (`v1`) to the same release commit:
+
+   ```bash
+   git tag -fa v1 -m "crap4ts v1"
+   git push origin refs/tags/v1 --force
+   ```
 
 ## Post-Release Verification
 

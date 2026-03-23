@@ -48,6 +48,11 @@ Run these before asking for review:
 npm run typecheck
 npm run lint
 npm test
+```
+
+Run these for release-sensitive changes, packaging work, or prerelease validation:
+
+```bash
 npm run mutation
 npm pack --dry-run
 ```
@@ -85,7 +90,7 @@ chore:           # maintenance, dependencies
 
 ## Code Style
 
-- ESLint and Prettier handle formatting. Run `npm run lint` to check.
+- ESLint is the enforced style gate in this repo. Prettier is available for editor integration, but there is no dedicated `npm run format` script.
 - Domain code (`src/domain/`) must be pure: no I/O, no Node APIs, no external packages
 - Adapters must implement port interfaces exactly
 

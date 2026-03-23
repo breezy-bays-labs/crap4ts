@@ -49,6 +49,8 @@ vitest run --coverage          # or: jest --coverage
 npx crap4ts
 ```
 
+crap4ts reads an existing coverage report, so step 1 must produce coverage JSON before step 2 runs.
+
 crap4ts auto-discovers coverage files (`coverage/coverage-final.json`, `coverage/coverage-v8.json`) and source directories (via `tsconfig.json` or `src/`).
 
 ## What is CRAP?
@@ -121,7 +123,7 @@ Notes:
 | `upload-artifact` | `true` | Upload JSON report as artifact |
 | `coverage-path` | auto | Path to coverage JSON |
 | `src` | auto | Source directories (space-separated) |
-| `coverage-metric` | `line` | Coverage metric: `line` or `branch` |
+| `coverage-metric` | auto (`line` in the CLI) | Coverage metric: `line` or `branch` |
 | `version` | `latest` | crap4ts version to install via npx |
 | `working-directory` | `.` | Directory to run analysis from |
 
@@ -276,6 +278,7 @@ const result = await parseCoverageFile("./coverage/coverage-final.json");
 
 - Functions with complexity but no matching coverage entry are now scored at 0% coverage and included in `result.functions`, `result.summary`, and threshold decisions.
 - Treat `result.functions` as the canonical scored result set. `result.unmatched` remains diagnostic mismatch detail and should not be added on top of summary totals.
+- GitHub Action users should update `uses: breezy-bays-labs/crap4ts@v0` to `uses: breezy-bays-labs/crap4ts@v1` once the v1 tag is published.
 
 ## Coverage Format Support
 

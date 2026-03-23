@@ -12,6 +12,7 @@ All notable changes to crap4ts are documented here. This project follows [Semant
 
 - JSON/API consumers should treat `result.functions` as the canonical scored result set. `result.summary`, `result.passed`, and threshold outcomes are derived from that set.
 - `result.unmatched` remains diagnostic mismatch detail and should not be added on top of summary totals.
+- GitHub Action users should update `uses: breezy-bays-labs/crap4ts@v0` to `uses: breezy-bays-labs/crap4ts@v1` when adopting the v1 release line.
 
 ### Added
 
