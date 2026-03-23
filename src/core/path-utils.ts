@@ -1,5 +1,7 @@
 import { realpathSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+
+const GLOB_META_RE = /[*?[\]{}]/;
 
 function normalizeSlashes(value: string): string {
   return value.replace(/\\/g, "/");
@@ -62,9 +64,48 @@ export function resolveIncludePatterns(
 }
 
 function canonicalizePath(inputPath: string): string {
+  const absolutePath = resolve(inputPath);
+
+  if (GLOB_META_RE.test(inputPath)) {
+    return canonicalizeFromExistingAncestor(absolutePath);
+  }
+
   try {
-    return realpathSync.native(inputPath);
-  } catch {
-    return resolve(inputPath);
+    return realpathSync.native(absolutePath);
+  } catch (error: unknown) {
+    if (isErrnoException(error) && error.code === "ENOENT") {
+      return canonicalizeFromExistingAncestor(absolutePath);
+    }
+    throw error;
+  }
+}
+
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error;
+}
+
+function canonicalizeFromExistingAncestor(absolutePath: string): string {
+  const suffix: string[] = [];
+  let currentPath = absolutePath;
+
+  while (true) {
+    try {
+      const canonicalBase = realpathSync.native(currentPath);
+      return suffix.length === 0
+        ? canonicalBase
+        : resolve(canonicalBase, ...suffix);
+    } catch (error: unknown) {
+      if (!isErrnoException(error) || error.code !== "ENOENT") {
+        throw error;
+      }
+
+      const parentPath = dirname(currentPath);
+      if (parentPath === currentPath) {
+        return absolutePath;
+      }
+
+      suffix.unshift(basename(currentPath));
+      currentPath = parentPath;
+    }
   }
 }

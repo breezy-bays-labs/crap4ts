@@ -212,6 +212,8 @@ for (const fn of result.functions) {
 }
 ```
 
+`result.functions` is the canonical scored result set used for `result.summary` and `result.passed`. If a function has complexity but no matching coverage entry, crap4ts includes it there as a worst-case 0% coverage verdict. The lower-level `result.unmatched` field is diagnostic mismatch detail and should not be added on top of the summary totals.
+
 Also available: `analyzeFile()` for single-file analysis, `defineConfig()` for typed configuration, and constants like `PRESETS` and `createThresholdConfig()`.
 
 ### Sub-path Exports

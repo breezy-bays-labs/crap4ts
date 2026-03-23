@@ -132,6 +132,10 @@ export interface RiskDistribution {
 }
 
 export interface AnalysisSummary {
+  /**
+   * Count of entries in `AnalysisResult.functions`.
+   * Includes unmatched complexity entries scored at 0% coverage.
+   */
   readonly totalFunctions: number;
   readonly totalFiles: number;
   readonly exceedingThreshold: number;
@@ -161,7 +165,16 @@ export type ThresholdPreset = "strict" | "default" | "lenient";
 // ── Top-Level Analysis Result ───────────────────────────────────────
 
 export interface AnalysisResult {
+  /**
+   * Canonical scored verdicts used for pass/fail and summary calculations.
+   * Includes unmatched complexity entries scored at 0% coverage.
+   */
   readonly functions: ReadonlyArray<FunctionVerdict>;
+  /**
+   * Diagnostic mismatch details preserved for reporting and tooling.
+   * Do not add these to `functions` or `summary` totals; no-coverage entries may
+   * already be represented in `functions` as worst-case verdicts.
+   */
   readonly unmatched: ReadonlyArray<UnmatchedFunction>;
   readonly warnings: ReadonlyArray<Warning>;
   readonly summary: AnalysisSummary;
@@ -219,4 +232,3 @@ export class InvalidCoverageError extends Error {
     this.name = "InvalidCoverageError";
   }
 }
-

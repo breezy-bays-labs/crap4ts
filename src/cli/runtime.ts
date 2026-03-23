@@ -108,7 +108,7 @@ export function sortVerdicts(
   verdicts: FunctionVerdict[],
   field: string,
 ): FunctionVerdict[] {
-  const sorted = verdicts;
+  const sorted = [...verdicts];
 
   switch (field) {
     case "crap":

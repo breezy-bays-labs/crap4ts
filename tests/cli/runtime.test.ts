@@ -105,6 +105,10 @@ describe("resolveThresholdFlag", () => {
   it("falls back to explicit threshold", () => {
     expect(resolveThresholdFlag({ threshold: 21 })).toBe(21);
   });
+
+  it("returns undefined when no threshold flags are provided", () => {
+    expect(resolveThresholdFlag({})).toBeUndefined();
+  });
 });
 
 describe("parseBreakdownCliFlag", () => {
@@ -116,6 +120,7 @@ describe("parseBreakdownCliFlag", () => {
     expect(parseBreakdownCliFlag("all")).toBe("all");
     expect(parseBreakdownCliFlag("exceeding")).toBe("exceeding");
     expect(parseBreakdownCliFlag("off")).toBe("off");
+    expect(parseBreakdownCliFlag(false)).toBeUndefined();
     expect(parseBreakdownCliFlag(undefined)).toBeUndefined();
   });
 
@@ -125,6 +130,10 @@ describe("parseBreakdownCliFlag", () => {
 });
 
 describe("coerceArrayOption", () => {
+  it("leaves undefined as undefined", () => {
+    expect(coerceArrayOption(undefined)).toBeUndefined();
+  });
+
   it("normalizes empty arrays to undefined", () => {
     expect(coerceArrayOption([])).toBeUndefined();
   });
@@ -175,6 +184,12 @@ describe("sortVerdicts", () => {
       .toEqual(["alpha", "bravo", "charlie"]);
   });
 
+  it("does not mutate the input array", () => {
+    const original = [...verdicts];
+    sortVerdicts(verdicts, "crap");
+    expect(verdicts).toEqual(original);
+  });
+
   it("rejects invalid sort fields", () => {
     expect(() => sortVerdicts([...verdicts], "rank")).toThrowError(CliOptionError);
   });
@@ -205,6 +220,17 @@ describe("applyFilters", () => {
 });
 
 describe("formatSummaryLine", () => {
+  it("formats a passing summary output", () => {
+    const summary = formatSummaryLine(createResult([
+      createVerdict("alpha", 10, 5, 80),
+      createVerdict("bravo", 8, 4, 90),
+    ]));
+
+    expect(summary).toBe(
+      "PASS: 2 functions | 0 above threshold (12) | worst: 24.0 | avg: 16.0",
+    );
+  });
+
   it("formats the compact summary output", () => {
     const summary = formatSummaryLine(createResult([
       createVerdict("alpha", 24, 5, 20),

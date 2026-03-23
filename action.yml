@@ -86,6 +86,20 @@ runs:
         run_crap4ts() {
           local format="$1"
           local -a cmd
+
+          case "$format" in
+            json|markdown|table) ;;
+            *)
+              echo "::error::Invalid crap4ts format: ${format}"
+              return 2
+              ;;
+          esac
+
+          if ! node -e 'const value = Number(process.argv[1]); if (!Number.isFinite(value) || value <= 0) process.exit(1)' "$INPUT_THRESHOLD"; then
+            echo "::error::Invalid threshold input: ${INPUT_THRESHOLD}"
+            return 2
+          fi
+
           if [ "$INPUT_LOCAL" = "true" ]; then
             cmd=(node dist/cli.js)
           else
@@ -118,7 +132,7 @@ runs:
         echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
 
         # For config/parse errors, dump the output and fail immediately
-        if [ $EXIT_CODE -eq 2 ] || [ $EXIT_CODE -eq 3 ]; then
+        if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 1 ]; then
           echo "::error::crap4ts failed with exit code $EXIT_CODE"
           cat crap4ts-report.json
           exit $EXIT_CODE
@@ -133,7 +147,19 @@ runs:
         if [ "$POST_COMMENT" = "true" ] && [ "$IS_PR" = "true" ]; then
           set +e
           run_crap4ts markdown > crap4ts-comment-body.md
+          MARKDOWN_EXIT_CODE=$?
           set -e
+
+          if [ $MARKDOWN_EXIT_CODE -ne 0 ] && [ $MARKDOWN_EXIT_CODE -ne 1 ]; then
+            echo "::error::crap4ts markdown report failed with exit code $MARKDOWN_EXIT_CODE"
+            cat crap4ts-comment-body.md
+            exit $MARKDOWN_EXIT_CODE
+          fi
+
+          if [ ! -s crap4ts-comment-body.md ]; then
+            echo "::error::crap4ts markdown report produced no output"
+            exit 3
+          fi
 
           # Determine analysis mode for footer
           if [ "$INPUT_CHANGED_ONLY" = "true" ] && [ -n "$PR_BASE_SHA" ]; then

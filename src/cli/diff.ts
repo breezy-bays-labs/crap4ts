@@ -54,7 +54,7 @@ function handleExecError(
   }
 
   throw error;
-};
+}
 
 // ── parseUnifiedDiff ────────────────────────────────────────────────
 
