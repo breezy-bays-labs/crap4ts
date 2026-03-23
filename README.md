@@ -68,16 +68,50 @@ A function with **high complexity and low coverage** gets a high CRAP score. Hig
 
 ## GitHub Action
 
-Add CRAP analysis to your CI pipeline with auto-updating PR comments:
+The action is designed for pull request quality gates: it reads an existing coverage report, comments on the PR, uploads a JSON artifact, and fails the workflow if functions exceed your threshold.
 
 ```yaml
-- uses: breezy-bays-labs/crap4ts@v0
-  with:
-    threshold: 16          # default
-    changed-only: true     # only analyze functions changed in this PR (default)
-    post-comment: true     # post/update PR comment with results (default)
-    upload-artifact: true  # upload JSON report as workflow artifact
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  crap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+      - run: npm run test:coverage
+
+      - uses: breezy-bays-labs/crap4ts@v1
+        with:
+          threshold: 16
+          changed-only: true
+          post-comment: true
+          upload-artifact: true
 ```
+
+Notes:
+
+- The action does not generate coverage for you. Run your test command with coverage before invoking it.
+- `post-comment` requires `pull-requests: write` permissions.
+- `changed-only` uses the PR base SHA when available and falls back to full analysis outside PR workflows.
+- Self-hosted runners must provide `git`, `jq`, and `gh` on `PATH`.
+- Use `working-directory` for monorepos or nested packages.
 
 | Input | Default | Description |
 |-------|---------|-------------|
@@ -99,6 +133,8 @@ Add CRAP analysis to your CI pipeline with auto-updating PR comments:
 | `total` | Total functions analyzed |
 | `exceeding` | Count of functions exceeding threshold |
 | `exit-code` | Raw exit code (0=pass, 1=threshold, 2=config, 3=parse) |
+
+If you only want a machine-readable report in CI, set `post-comment: false` and consume `crap4ts-report.json` from the uploaded artifact.
 
 ## CLI
 
@@ -236,6 +272,11 @@ import { parseCoverage, parseCoverageFile } from "crap4ts/coverage";
 const result = await parseCoverageFile("./coverage/coverage-final.json");
 ```
 
+## Upgrading From 0.x
+
+- Functions with complexity but no matching coverage entry are now scored at 0% coverage and included in `result.functions`, `result.summary`, and threshold decisions.
+- Treat `result.functions` as the canonical scored result set. `result.unmatched` remains diagnostic mismatch detail and should not be added on top of summary totals.
+
 ## Coverage Format Support
 
 | Format | Source | Status |
@@ -254,7 +295,15 @@ const result = await parseCoverageFile("./coverage/coverage-final.json");
 
 ## Contributing
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the project's hexagonal architecture and dependency rules.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development workflow, local quality gates, and PR expectations.
+
+Additional project docs:
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md) for layering and dependency rules
+- [CHANGELOG.md](./CHANGELOG.md) for release notes and upgrade history
+- [SECURITY.md](./SECURITY.md) for vulnerability reporting
+- [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) for community expectations
+- [RELEASING.md](./RELEASING.md) for the publish and tagging checklist
 
 ## License
 
