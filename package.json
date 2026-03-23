@@ -4,7 +4,7 @@
   "description": "CRAP score analyzer for TypeScript — find complex, under-tested functions",
   "type": "module",
   "bin": {
-    "crap4ts": "./dist/cli.js"
+    "crap4ts": "dist/cli.js"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -82,7 +82,7 @@
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "https://github.com/breezy-bays-labs/crap4ts.git"
+    "url": "git+https://github.com/breezy-bays-labs/crap4ts.git"
   },
   "homepage": "https://github.com/breezy-bays-labs/crap4ts",
   "bugs": {
