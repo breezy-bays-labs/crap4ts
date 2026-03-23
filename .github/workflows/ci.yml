@@ -45,8 +45,8 @@ jobs:
         uses: ./
         with:
           local: true
-          changed-only: ${{ github.event_name == 'pull_request' }}
-          post-comment: ${{ github.event_name == 'pull_request' }}
+          changed-only: false
+          post-comment: false
           upload-artifact: true
       - name: Verify smoke test scored real functions
         run: test "$(jq -r '.summary.totalFunctions' crap4ts-report.json)" -gt 0
