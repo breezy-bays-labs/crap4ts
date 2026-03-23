@@ -16,7 +16,11 @@ policy.
 If you discover a security vulnerability in crap4ts, please report it
 responsibly.
 
-**Do not open a public issue.** Instead, email **security@breezybayslabs.com** with:
+**Do not open a public issue.** Instead, use GitHub's private vulnerability
+reporting flow for this repository from the **Security** tab and choose
+**Report a vulnerability**.
+
+Include:
 
 1. A description of the vulnerability
 2. Steps to reproduce
