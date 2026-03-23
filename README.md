@@ -9,6 +9,8 @@ CRAP score analyzer for TypeScript — find functions that are too complex and t
 
 Unlike hosted services, crap4ts runs locally and in CI with zero configuration, combining cyclomatic complexity *and* test coverage into a single actionable score.
 
+Coverage alone can hide risky branching logic, and complexity alone cannot tell you whether that risk is tested. crap4ts combines both so you can find the functions most likely to hurt refactors, reviews, and releases.
+
 ```
 $ npx crap4ts --top 5
 
@@ -50,6 +52,12 @@ npx crap4ts
 ```
 
 crap4ts reads an existing coverage report, so step 1 must produce coverage JSON before step 2 runs.
+
+If you want a config file first, scaffold one up front:
+
+```bash
+npx crap4ts init
+```
 
 crap4ts auto-discovers coverage files (`coverage/coverage-final.json`, `coverage/coverage-v8.json`) and source directories (via `tsconfig.json` or `src/`).
 
