@@ -59,7 +59,7 @@ representative at an online or offline event.
 ## Reporting
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainers at `security@breezybayslabs.com`. That inbox
+reported to the project maintainers at `breezy-bays-labs@proton.me`. That inbox
 is used for confidential maintainer contact, including Code of Conduct reports.
 All complaints will be reviewed and investigated promptly and fairly.
 
