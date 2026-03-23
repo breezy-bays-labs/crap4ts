@@ -1,17 +1,55 @@
 # crap4ts
 
-CRAP (Change Risk Anti-Patterns) score analyzer for TypeScript.
-Find functions that are too complex and too poorly tested.
+[![npm version](https://img.shields.io/npm/v/crap4ts)](https://www.npmjs.com/package/crap4ts)
+[![CI](https://github.com/breezy-bays-labs/crap4ts/actions/workflows/ci.yml/badge.svg)](https://github.com/breezy-bays-labs/crap4ts/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Node >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+
+CRAP score analyzer for TypeScript — find functions that are too complex and too poorly tested.
+
+Unlike hosted services, crap4ts runs locally and in CI with zero configuration, combining cyclomatic complexity *and* test coverage into a single actionable score.
+
+```
+$ npx crap4ts --top 5
+
+ crap4ts v1.0.0 — CRAP Score Analysis
+
+ Function                        CC   Cov%   CRAP   Risk
+ ────────────────────────────────────────────────────────
+ parseLegacyConfig               12    20%    85.73  High
+ resolveImports                   8    45%    18.65  Moderate
+ validateSchema                   6    70%     6.97  Acceptable
+ transformOutput                  3    85%     3.03  Low
+ formatResult                     2   100%     2.0   Low
+
+ Summary: 42 functions | 2 above threshold (16) | worst: 85.73 | FAIL
+```
+
+## Install
+
+```bash
+npm install --save-dev crap4ts
+```
+
+Or run directly with `npx`:
+
+```bash
+npx crap4ts
+```
+
+**Requirements:** Node.js >= 18, TypeScript >= 5.0 (peer dependency). Works in both ESM and CommonJS projects.
 
 ## Quick Start
 
 ```bash
-# Run your tests with coverage first
-vitest run --coverage
+# 1. Run your tests with coverage
+vitest run --coverage          # or: jest --coverage
 
-# Then analyze
+# 2. Analyze
 npx crap4ts
 ```
+
+crap4ts auto-discovers coverage files (`coverage/coverage-final.json`, `coverage/coverage-v8.json`) and source directories (via `tsconfig.json` or `src/`).
 
 ## What is CRAP?
 
@@ -19,9 +57,7 @@ npx crap4ts
 CRAP(m) = CC(m)^2 * (1 - cov(m)/100)^3 + CC(m)
 ```
 
-A function with **high complexity and low coverage** gets a high CRAP score.
-High complexity but high coverage gets a moderate score.
-Low complexity gets a low score regardless of coverage.
+A function with **high complexity and low coverage** gets a high CRAP score. High complexity but high coverage gets a moderate score. Low complexity gets a low score regardless of coverage.
 
 | CRAP Score | Risk Level |
 |:----------:|------------|
@@ -30,15 +66,62 @@ Low complexity gets a low score regardless of coverage.
 | 8 < x ≤ 30 | Moderate   |
 | > 30       | High       |
 
+## GitHub Action
+
+Add CRAP analysis to your CI pipeline with auto-updating PR comments:
+
+```yaml
+- uses: breezy-bays-labs/crap4ts@v0
+  with:
+    threshold: 16          # default
+    changed-only: true     # only analyze functions changed in this PR (default)
+    post-comment: true     # post/update PR comment with results (default)
+    upload-artifact: true  # upload JSON report as workflow artifact
+```
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `threshold` | `16` | CRAP score threshold |
+| `changed-only` | `true` | Only analyze functions changed in PR |
+| `post-comment` | `true` | Post/update PR comment with results |
+| `upload-artifact` | `true` | Upload JSON report as artifact |
+| `coverage-path` | auto | Path to coverage JSON |
+| `src` | auto | Source directories (space-separated) |
+| `coverage-metric` | `line` | Coverage metric: `line` or `branch` |
+| `version` | `latest` | crap4ts version to install via npx |
+| `working-directory` | `.` | Directory to run analysis from |
+
+| Output | Description |
+|--------|-------------|
+| `passed` | Whether all functions passed threshold |
+| `total` | Total functions analyzed |
+| `exceeding` | Count of functions exceeding threshold |
+| `exit-code` | Raw exit code (0=pass, 1=threshold, 2=config, 3=parse) |
+
 ## CLI
 
 ```bash
-npx crap4ts                      # zero-config analysis
-npx crap4ts --top 10             # 10 worst functions
-npx crap4ts --strict             # threshold 8 (Uncle Bob mode)
-npx crap4ts --diff main          # only changed files
-npx crap4ts -f json -t 12        # JSON output, threshold 12
+npx crap4ts                           # zero-config analysis
+npx crap4ts --top 10                  # 10 worst functions
+npx crap4ts --strict                  # threshold 8 (strict mode)
+npx crap4ts --lenient                 # threshold 30 (gradual adoption)
+npx crap4ts --diff main              # only changed files since main
+npx crap4ts -f json -t 12            # JSON output, threshold 12
+npx crap4ts --sort complexity --top 5 # top 5 by complexity
+npx crap4ts --summary                # one-line summary only
+npx crap4ts --breakdown all -f json  # CC contributor breakdown (JSON)
+npx crap4ts -q                       # quiet — exit code only
 ```
+
+Scaffold a config file:
+
+```bash
+npx crap4ts init    # creates crap4ts.config.ts with sensible defaults
+```
+
+Run `crap4ts --help` for the full option reference.
+
+**Mutual exclusions:** `--strict`, `--lenient`, and `--threshold` cannot be combined. `--quiet` and `--verbose` cannot be combined.
 
 ### Exit Codes
 
@@ -49,27 +132,11 @@ npx crap4ts -f json -t 12        # JSON output, threshold 12
 | 2    | Configuration/input error |
 | 3    | Parse error |
 
-## Programmatic API
+### Output Formats
 
-```ts
-import { analyze } from "crap4ts";
+Use `-f` / `--format` to choose output format: `table` (default), `json`, or `markdown`.
 
-const result = await analyze({
-  coverage: "./coverage/coverage-final.json",
-  threshold: 12,
-});
-
-console.log(result.passed); // true if all functions pass
-console.log(result.summary.crapLoad); // total excess over threshold
-```
-
-### Composable Primitives
-
-```ts
-import { computeCrap, classifyRisk } from "crap4ts/formula";
-import { computeComplexity } from "crap4ts/complexity";
-import { parseCoverage } from "crap4ts/coverage";
-```
+The `--breakdown` flag (JSON only) adds per-function cyclomatic complexity contributor maps. Values: `all`, `exceeding` (default when flag is present), or `off`.
 
 ## Configuration
 
@@ -80,19 +147,90 @@ import { defineConfig } from "crap4ts";
 export default defineConfig({
   threshold: 12,
   coverageMetric: "line",
+  exclude: ["**/*.test.*", "**/*.spec.*"],
   thresholds: {
-    "src/domain/**": 8,
-    "src/legacy/**": 30,
+    "src/domain/**": 8,    // strict for domain layer
+    "src/legacy/**": 30,   // lenient for legacy code
   },
 });
 ```
 
+**Config file discovery** (first match wins): `crap4ts.config.ts` > `.js` > `.mjs` > `package.json` `"crap4ts"` field.
+
+**Config priority:** defaults < config file < environment variables < CLI flags.
+
+### All Config Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `threshold` | `number` | Default CRAP threshold |
+| `coverageMetric` | `"line" \| "branch"` | Coverage metric to use |
+| `include` | `string[]` | File include globs |
+| `exclude` | `string[]` | File exclude globs |
+| `thresholds` | `Record<string, number>` | Per-path threshold overrides |
+| `format` | `"table" \| "json" \| "markdown"` | Output format |
+| `src` | `string \| string[]` | Source directories |
+| `breakdown` | `"off" \| "exceeding" \| "all"` | CC contributor breakdown |
+| `sort` | `"crap" \| "complexity" \| "coverage" \| "name"` | Sort field |
+| `top` | `number` | Show N worst functions |
+| `summary` | `boolean` | Show summary line only |
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `CRAP4TS_THRESHOLD` | CRAP threshold (number) |
+| `CRAP4TS_FORMAT` | Output format: `table`, `json`, `markdown` |
+| `CRAP4TS_COVERAGE` | Path to coverage JSON |
+| `NO_COLOR` | Disable colors ([no-color.org](https://no-color.org) convention) |
+
 ### Coverage Metric
 
-The `coverageMetric` option controls which coverage data is used for CRAP scoring:
+- **`line`** (default) — Uses line coverage percentages.
+- **`branch`** — Uses branch coverage. Functions with no branches default to 100% coverage.
 
-- **`"line"`** (default) — Uses line coverage percentages.
-- **`"branch"`** — Uses branch coverage percentages. When a function has no branches (e.g., a simple function with no `if`/`switch`/`??`), branch coverage defaults to **100%** since there are no branches to test.
+## Programmatic API
+
+### Primary API
+
+```ts
+import { analyze, RiskLevel } from "crap4ts";
+
+const result = await analyze({
+  coverage: "./coverage/coverage-final.json",
+  threshold: 12,
+});
+
+console.log(result.passed);              // true if all functions pass
+console.log(result.summary.crapLoad);    // total excess over threshold
+console.log(result.summary.maxCrap);     // worst CRAP score
+
+for (const fn of result.functions) {
+  if (fn.scored.crap.riskLevel === RiskLevel.High) {
+    console.log(`${fn.scored.identity.qualifiedName}: ${fn.scored.crap.value}`);
+  }
+}
+```
+
+Also available: `analyzeFile()` for single-file analysis, `defineConfig()` for typed configuration, and constants like `PRESETS` and `createThresholdConfig()`.
+
+### Sub-path Exports
+
+For building custom tooling, crap4ts exposes composable primitives:
+
+```ts
+// Pure CRAP formula — no I/O, no dependencies
+import { computeCrap, classifyRisk } from "crap4ts/formula";
+const { value, riskLevel } = computeCrap(12, 45); // CC=12, coverage=45%
+
+// Complexity extraction from source text
+import { extractComplexity } from "crap4ts/complexity";
+const functions = extractComplexity(sourceCode, "file.ts");
+
+// Coverage parsing — sync (in-memory) or async (from file)
+import { parseCoverage, parseCoverageFile } from "crap4ts/coverage";
+const result = await parseCoverageFile("./coverage/coverage-final.json");
+```
 
 ## Coverage Format Support
 
@@ -101,6 +239,18 @@ The `coverageMetric` option controls which coverage data is used for CRAP scorin
 | Istanbul JSON | jest, vitest (istanbul), nyc | Supported |
 | V8 JSON | vitest (v8), c8 | Supported |
 | LCOV | various | Planned |
+
+## FAQ
+
+**I get "0 functions analyzed"** — crap4ts couldn't match coverage data to source files. Check that your coverage path is correct and your source files are under the discovered `src/` directory. Use `--verbose` to see discovery details.
+
+**All functions show 100% coverage** — You may be pointing at the wrong coverage file format. If using vitest with V8 provider, ensure you're using the V8 JSON output, not the Istanbul-format summary.
+
+**CRAP scores seem too high** — The CRAP formula is sensitive to low coverage on complex functions. A function with CC=10 and 50% coverage scores 22.5. The same function at 80% coverage scores 10.8. Focus on improving coverage for your most complex functions first.
+
+## Contributing
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the project's hexagonal architecture and dependency rules.
 
 ## License
 
