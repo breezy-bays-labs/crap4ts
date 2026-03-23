@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
@@ -28,10 +28,6 @@ async function runCli(
     };
   }
 }
-
-beforeAll(async () => {
-  await execFileAsync("npm", ["run", "build"], { cwd: ROOT });
-}, 30_000);
 
 describe("--breakdown CLI flag", () => {
   describe("flag parsing", () => {

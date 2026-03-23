@@ -43,12 +43,6 @@ async function runCli(
   }
 }
 
-// ── Build guard ─────────────────────────────────────────────────────
-
-beforeAll(async () => {
-  await execFileAsync("npm", ["run", "build"], { cwd: ROOT });
-}, 30_000);
-
 // ── Exit Codes ──────────────────────────────────────────────────────
 
 describe("exit codes", () => {
