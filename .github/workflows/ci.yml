@@ -51,7 +51,7 @@ jobs:
           post-comment: ${{ github.event_name == 'pull_request' }}
           upload-artifact: true
       - name: Verify smoke test scored real functions
-        run: test "${{ steps.action_smoke_test.outputs.total }}" -gt 0
+        run: test "$(jq -r '.summary.totalFunctions' crap4ts-report.json)" -gt 0
 
   mutation:
     runs-on: ubuntu-latest

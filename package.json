@@ -65,7 +65,7 @@
     "test:coverage": "npm run build && vitest run --coverage",
     "lint": "eslint src/ tests/",
     "typecheck": "tsc --noEmit",
-    "mutation": "stryker run",
+    "mutation": "npm run build && stryker run",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
