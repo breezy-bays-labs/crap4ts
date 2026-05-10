@@ -5,7 +5,7 @@
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPLv3%2B-blue.svg)](./LICENSE)
 [![Node >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
-> **Maintenance mode.** `crap4ts@1.x` is in maintenance mode (security and critical bug fixes only). A `crap4ts@2` is being rebuilt as a thin Rust-backed adapter on top of the language-agnostic `crap-core` library, distributed via napi-rs. Track progress at [breezy-bays-labs/crap-rs](https://github.com/breezy-bays-labs/crap-rs) (repo was renamed from `crap4rs`). For working CRAP analysis on TypeScript today, `crap4ts@1.x` is still the answer.
+> **Maintenance mode.** `crap4ts@1.x` is in maintenance mode (security and critical bug fixes only). `crap4ts@2` is being rebuilt as a thin Rust-backed adapter on top of the language-agnostic `crap-core` library, distributed via napi-rs. Track progress at [breezy-bays-labs/crap4rs](https://github.com/breezy-bays-labs/crap4rs) (the repo will be renamed to `crap-rs` at the v0.5.0 release). For working CRAP analysis on TypeScript today, `crap4ts@1.x` is still the answer.
 
 CRAP score analyzer for TypeScript — find functions that are too complex and too poorly tested.
 
