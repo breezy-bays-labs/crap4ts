@@ -58,13 +58,12 @@ function findCandidates(
   for (const cov of fileCoverages) {
     if (usedCoverage.has(cov)) continue;
     const ratio = overlapRatio(compSpan, cov.span);
-    if (ratio < overlapThreshold) continue;
-    candidates.push({
-      cov,
-      ratio,
-      contains: spanContains(cov.span, compSpan),
-      nameMatch: cov.name === compName,
-    });
+    const contains = spanContains(cov.span, compSpan);
+    // Some coverage formats record only the function body, not the full declaration.
+    // Accept containment in either direction as a fallback when ratio is insufficient,
+    // but only use coverage-encloses-complexity for the ranking signal.
+    if (ratio < overlapThreshold && !contains && !spanContains(compSpan, cov.span)) continue;
+    candidates.push({ cov, ratio, contains, nameMatch: cov.name === compName });
   }
   return candidates;
 }
@@ -116,9 +115,9 @@ export function groupBy<T>(items: ReadonlyArray<T>, key: (item: T) => string): M
  * Algorithm:
  * 1. Group both inputs by filePath.
  * 2. Within each file, for each FunctionComplexity:
- *    - Find FunctionCoverage candidates with overlap ratio >= 0.8
- *    - Prefer containment (coverage span fully contains complexity span)
- *    - Use name as tiebreaker when overlap is equal
+ *    - Find FunctionCoverage candidates with overlap ratio >= 0.8, or where
+ *      either span fully contains the other
+ *    - Prefer containment over partial overlap; use ratio then name as tiebreakers
  *    - Enforce 1:1 constraint (each coverage matched at most once)
  * 3. Collect unmatched entries.
  */

@@ -179,4 +179,38 @@ describe("defaultSpanMatcher", () => {
     );
     expect(result.unmatchedCoverage).toHaveLength(1);
   });
+
+  it("matches when the coverage span is contained within the complexity span", () => {
+    // Some coverage formats record only the function body span; a long parameter
+    // list can push the overlap ratio below the threshold despite a valid match.
+    const result = defaultSpanMatcher(
+      [makeComplexity("a.ts", "complexFn", 5, 24)],
+      [makeCoverage("a.ts", "complexFn", 11, 24)],
+    );
+    expect(result.matched).toHaveLength(1);
+    expect(result.unmatchedComplexity).toHaveLength(0);
+    expect(result.unmatchedCoverage).toHaveLength(0);
+  });
+
+  it("does not boost priority for complexity-contains-coverage — a high-ratio candidate wins", () => {
+    // Accepted via containment gate, but must not outrank a better-fitting candidate.
+    const result = defaultSpanMatcher(
+      [makeComplexity("a.ts", "outer", 1, 100)],
+      [
+        makeCoverage("a.ts", "outer", 1, 100),  // ratio 1.0 — correct match
+        makeCoverage("a.ts", "inner", 50, 60),  // accepted via containment, lower ratio
+      ],
+    );
+    expect(result.matched).toHaveLength(1);
+    expect(result.matched[0]!.coverage.span.startLine).toBe(1);
+  });
+
+  it("rejects partial overlap below the threshold when neither span contains the other", () => {
+    const result = defaultSpanMatcher(
+      [makeComplexity("a.ts", "foo", 1, 11)],
+      [makeCoverage("a.ts", "foo", 8, 18)],
+    );
+    expect(result.matched).toHaveLength(0);
+    expect(result.unmatchedComplexity).toHaveLength(1);
+  });
 });
